@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% block title %}Exceptions - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rules.css') }}">
+{% endblock %}
+{% block breadcrumb %}
+  <a href="{{ url_for('rules.rules_list') }}" class="breadcrumb-link">Rules</a>
+  <span class="breadcrumb-sep">/</span>
+  <span>Exceptions</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Rule Exceptions</h1>
+  <p class="page-subtitle">Exceptions negate specific field values to prevent false positives.</p>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="tab-bar">
+  <a href="{{ url_for('rules.exceptions_list', tab='custom', q=search, sort_by=sort_by, sort_dir=sort_dir) }}"
+     class="tab {% if active_tab == 'custom' %}active{% endif %}">Custom Rule Exceptions</a>
+  <a href="{{ url_for('rules.exceptions_list', tab='default', q=search, sort_by=sort_by, sort_dir=sort_dir) }}"
+     class="tab {% if active_tab == 'default' %}active{% endif %}">Default Rule Exceptions</a>
+  <a href="{{ url_for('rules.exceptions_list', tab='history') }}"
+     class="tab {% if active_tab == 'history' %}active{% endif %}">History</a>
+</div>
+
+<!-- Search filter (shared by custom + default tabs) -->
+{% if active_tab in ('custom', 'default') %}
+<div class="filter-bar">
+  <form method="GET" class="filter-form">
+    <input type="hidden" name="tab" value="{{ active_tab }}">
+    <input type="hidden" name="sort_by" value="{{ sort_by }}">
+    <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
+    <input type="text" name="q" class="form-control" placeholder="Search rule ID or description..."
+           value="{{ search }}">
+    <button type="submit" class="btn btn-secondary">Search</button>
+    {% if search %}<a href="{{ url_for('rules.exceptions_list', tab=active_tab) }}" class="btn btn-ghost">Clear</a>{% endif %}
+  </form>
+</div>
+{% endif %}
+
+<!-- Custom rule exceptions -->
+{% if active_tab == 'custom' %}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">{{ custom_exceptions | length }} custom rule exception{% if custom_exceptions | length != 1 %}s{% endif %}</span>
+  </div>
+  <div class="table-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:80px">
+            {% set nd = 'desc' if sort_by == 'rule_id' and sort_dir == 'asc' else 'asc' %}
+            <a href="?tab=custom&q={{ search }}&sort_by=rule_id&sort_dir={{ nd }}"
+               class="col-sort{% if sort_by == 'rule_id' %} col-sort-active{% endif %}">
+              Rule ID{% if sort_by == 'rule_id' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th style="width:60px">
+            {% set nd = 'desc' if sort_by == 'level' and sort_dir == 'asc' else 'asc' %}
+            <a href="?tab=custom&q={{ search }}&sort_by=level&sort_dir={{ nd }}"
+               class="col-sort{% if sort_by == 'level' %} col-sort-active{% endif %}">
+              Level{% if sort_by == 'level' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th>
+            {% set nd = 'desc' if sort_by == 'description' and sort_dir == 'asc' else 'asc' %}
+            <a href="?tab=custom&q={{ search }}&sort_by=description&sort_dir={{ nd }}"
+               class="col-sort{% if sort_by == 'description' %} col-sort-active{% endif %}">
+              Description{% if sort_by == 'description' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th>Exception Fields</th>
+          <th style="width:80px">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in custom_exceptions %}
+        <tr>
+          <td class="font-mono">{{ item.rule.id }}</td>
+          <td><span class="level-badge level-{{ item.rule.level }}">{{ item.rule.level }}</span></td>
+          <td>
+            <div class="rule-desc">{{ item.rule.description or 'No description' }}</div>
+          </td>
+          <td>
+            {% for field in item.exception_fields %}
+            <div class="text-sm font-mono">{{ field.name }}: {{ field.value[:60] }}{% if field.value | length > 60 %}...{% endif %}</div>
+            {% endfor %}
+          </td>
+          <td>
+            <button class="btn btn-xs btn-ghost view-xml-btn"
+                    data-rule-id="{{ item.rule.id }}" data-source="custom"
+                    data-xml="{{ item.rule.raw_xml | e }}">XML</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty-state">
+          <div class="empty-content">
+            <p>No custom rule exceptions found.</p>
+            {% if search %}<p class="text-muted">Try a different search term</p>{% endif %}
+          </div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if per_page and total > per_page %}
+  <div class="pagination" style="padding:12px 16px">
+    {% if page > 1 %}
+    <a href="?tab=custom&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&page={{ page - 1 }}" class="btn btn-sm btn-ghost">Previous</a>
+    {% endif %}
+    <span class="page-info">Page {{ page }} of {{ total_pages }} ({{ total }} exceptions)</span>
+    {% if page < total_pages %}
+    <a href="?tab=custom&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&page={{ page + 1 }}" class="btn btn-sm btn-ghost">Next</a>
+    {% endif %}
+    <a href="?tab=custom&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&all=1" class="btn btn-sm btn-ghost">View All</a>
+  </div>
+  {% elif not per_page and total > 100 %}
+  <div class="pagination" style="padding:12px 16px">
+    <span class="page-info">Showing all {{ total }} exceptions</span>
+    <a href="?tab=custom&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&page=1" class="btn btn-sm btn-ghost">Paginate</a>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Default rule exceptions -->
+{% if active_tab == 'default' %}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">{{ default_exceptions | length }} default rule exception{% if default_exceptions | length != 1 %}s{% endif %}</span>
+    <span class="card-subtitle text-muted">From default_rules_exceptions.xml</span>
+  </div>
+  <div class="table-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:80px">
+            {% set nd = 'desc' if sort_by == 'rule_id' and sort_dir == 'asc' else 'asc' %}
+            <a href="?tab=default&q={{ search }}&sort_by=rule_id&sort_dir={{ nd }}"
+               class="col-sort{% if sort_by == 'rule_id' %} col-sort-active{% endif %}">
+              Rule ID{% if sort_by == 'rule_id' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th style="width:60px">
+            {% set nd = 'desc' if sort_by == 'level' and sort_dir == 'asc' else 'asc' %}
+            <a href="?tab=default&q={{ search }}&sort_by=level&sort_dir={{ nd }}"
+               class="col-sort{% if sort_by == 'level' %} col-sort-active{% endif %}">
+              Level{% if sort_by == 'level' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th>
+            {% set nd = 'desc' if sort_by == 'description' and sort_dir == 'asc' else 'asc' %}
+            <a href="?tab=default&q={{ search }}&sort_by=description&sort_dir={{ nd }}"
+               class="col-sort{% if sort_by == 'description' %} col-sort-active{% endif %}">
+              Description{% if sort_by == 'description' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th>Exception Fields</th>
+          <th style="width:80px">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rule in default_exceptions %}
+        <tr>
+          <td class="font-mono">{{ rule.id }}</td>
+          <td><span class="level-badge level-{{ rule.level }}">{{ rule.level }}</span></td>
+          <td>{{ rule.description or 'No description' }}</td>
+          <td>
+            {% for field in rule.fields %}
+            {% if field.negate %}
+            <div class="text-sm font-mono">{{ field.name }}: {{ field.value[:60] }}{% if field.value | length > 60 %}...{% endif %}</div>
+            {% endif %}
+            {% endfor %}
+          </td>
+          <td>
+            <button class="btn btn-xs btn-ghost view-xml-btn"
+                    data-rule-id="{{ rule.id }}" data-source="exceptions"
+                    data-xml="{{ rule.raw_xml | e }}">XML</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty-state">
+          <div class="empty-content">
+            <p>No default rule exceptions found.</p>
+            {% if search %}<p class="text-muted">Try a different search term</p>{% endif %}
+          </div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if per_page and total > per_page %}
+  <div class="pagination" style="padding:12px 16px">
+    {% if page > 1 %}
+    <a href="?tab=default&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&page={{ page - 1 }}" class="btn btn-sm btn-ghost">Previous</a>
+    {% endif %}
+    <span class="page-info">Page {{ page }} of {{ total_pages }} ({{ total }} exceptions)</span>
+    {% if page < total_pages %}
+    <a href="?tab=default&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&page={{ page + 1 }}" class="btn btn-sm btn-ghost">Next</a>
+    {% endif %}
+    <a href="?tab=default&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&all=1" class="btn btn-sm btn-ghost">View All</a>
+  </div>
+  {% elif not per_page and total > 100 %}
+  <div class="pagination" style="padding:12px 16px">
+    <span class="page-info">Showing all {{ total }} exceptions</span>
+    <a href="?tab=default&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&page=1" class="btn btn-sm btn-ghost">Paginate</a>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- History -->
+{% if active_tab == 'history' %}
+<div class="card">
+  <div class="card-header"><span class="card-title">Exception History</span></div>
+  <div class="table-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr><th>Type</th><th>Rule ID</th><th>Source</th><th>Field</th><th>Value</th><th>By</th><th>Date</th><th>Diff</th></tr>
+      </thead>
+      <tbody>
+        {% for action in actions %}
+        <tr>
+          <td><span class="tag">{{ action.action_type | replace('_', ' ') }}</span></td>
+          <td class="font-mono">{{ action.rule_id }}</td>
+          <td>{{ action.rule_source }}</td>
+          <td class="font-mono text-sm">{{ action.field_name or '-' }}</td>
+          <td class="font-mono text-sm">{{ (action.field_value or '')[:50] }}</td>
+          <td>{{ action.author or '-' }}</td>
+          <td class="text-sm text-muted">{{ action.created_at[:16] }}</td>
+          <td>
+            {% if action.diff_after %}
+            <button class="btn btn-xs btn-ghost diff-btn" data-diff="{{ action.diff_after | e }}">Diff</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="empty-state">No exception history.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- XML / Diff modals -->
+<div class="modal-overlay" id="xmlModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">Rule XML</h3>
+      <button class="modal-close" id="xmlModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="xmlContent" class="xml-viewer"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="diffModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">Change Diff</h3>
+      <button class="modal-close" id="diffModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="diffContent" class="diff-viewer"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_js %}
+<script src="{{ url_for('static', filename='js/xml-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/diff-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/rules.js') }}"></script>
+{% endblock %}

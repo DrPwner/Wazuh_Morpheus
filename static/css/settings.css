@@ -1,0 +1,565 @@
+/* settings.css */
+.settings-layout { max-width: 800px; }
+
+/* ============================================================
+   Backup schedule picker
+   ============================================================ */
+
+/* Pill-style tab row */
+.sched-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.sched-tab {
+  padding: 5px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.sched-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-hover, var(--border-color));
+}
+.sched-tab.sched-tab-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Panel container */
+.sched-panel-wrap {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  min-height: 64px;
+}
+.sched-panel { display: none; }
+
+/* Sentence-style layout: "Run every [N] hours" */
+.sched-sentence {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sched-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.sched-num {
+  width: 74px !important;
+  text-align: center;
+}
+.sched-time {
+  width: 116px !important;
+}
+.sched-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Day-of-week toggle buttons */
+.dow-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.dow-btn {
+  padding: 4px 11px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  min-width: 42px;
+  text-align: center;
+  user-select: none;
+}
+.dow-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.dow-btn.dow-active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--accent-hover);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Divider inside card for grouping related fields */
+.section-divider {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 20px 0;
+}
+
+/* WazuhFields info block */
+.wazuh-fields-info p {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.fields-cmd-block {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  color: var(--accent-text);
+  margin: 6px 0 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Disabled action buttons in users table */
+.btn[disabled] {
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: auto; /* keep title tooltip visible */
+}
+
+/* ============================================================
+   Roles grid
+   ============================================================ */
+.roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.role-card .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.role-card .card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Permissions modal — shared
+   ============================================================ */
+#editRoleModal .modal-body,
+#permsModal .modal-body {
+  max-height: 65vh;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+.perms-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent-text);
+}
+
+/* ============================================================
+   Permissions grid — categories + rows
+   ============================================================ */
+.perms-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.perms-category {
+  display: flex;
+  flex-direction: column;
+}
+
+.category-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 4px;
+}
+
+/* Role permissions — checkbox rows */
+.perm-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s;
+  user-select: none;
+}
+
+.perm-checkbox-row:hover {
+  background: var(--bg-hover);
+}
+
+.perm-checkbox-row input[type="checkbox"] {
+  flex-shrink: 0;
+  accent-color: var(--accent-text);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.perm-checkbox-row .perm-label-name {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.perm-checkbox-row .perm-label-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* User permissions — radio rows */
+.perm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s;
+}
+
+.perm-row:hover {
+  background: var(--bg-hover);
+}
+
+.perm-row .perm-name {
+  flex: 1;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  min-width: 0;
+}
+
+.perm-row .perm-radio-group {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.perm-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-secondary);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.perm-radio-label:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-color);
+}
+
+.perm-radio-label input[type="radio"] {
+  display: none;
+}
+
+.perm-radio-label.is-grant  { color: var(--success-text); }
+.perm-radio-label.is-revoke { color: var(--danger-text); }
+
+.perm-radio-label input[type="radio"]:checked + span {
+  font-weight: 600;
+}
+
+/* Checked state highlights */
+.perm-radio-label.is-grant input[type="radio"]:checked  ~ * { font-weight: 600; }
+.perm-radio-label:has(input[type="radio"]:checked).is-grant  {
+  background: rgba(82,196,26,0.08);
+  border-color: var(--success-text, #52c41a);
+}
+.perm-radio-label:has(input[type="radio"]:checked).is-revoke {
+  background: rgba(255,77,79,0.08);
+  border-color: var(--danger-text, #ff4d4f);
+}
+.perm-radio-label:has(input[type="radio"]:checked).is-inherit {
+  background: var(--bg-hover);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+/* ============================================================
+   Email Templates list
+   ============================================================ */
+.tpl-list {
+  border-top: 1px solid var(--border-color);
+}
+
+.tpl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.1s;
+}
+
+.tpl-row:last-child { border-bottom: none; }
+.tpl-row:hover { background: var(--bg-hover); }
+
+.tpl-row-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tpl-row-label {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.tpl-row-type {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.tpl-type-default {
+  background: color-mix(in srgb, var(--text-muted) 15%, transparent);
+  color: var(--text-muted);
+}
+
+.tpl-type-custom {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent-text);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.tpl-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.tpl-use-custom-wrap { margin: 0; }
+
+/* ============================================================
+   Template editor modal
+   ============================================================ */
+.tpl-modal-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 20px;
+  background: var(--bg-elevated);
+}
+
+.tpl-modal-tab {
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+  margin-bottom: -1px;
+}
+
+.tpl-modal-tab:hover { color: var(--text-primary); }
+.tpl-modal-tab.active {
+  color: var(--accent-text);
+  border-bottom-color: var(--accent-text);
+  font-weight: 600;
+}
+
+.tpl-tab-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.tpl-vars-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+}
+
+.tpl-vars-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 2px;
+  white-space: nowrap;
+}
+
+.tpl-var-chip {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-text);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.tpl-var-chip:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.tpl-editor {
+  flex: 1;
+  width: 100%;
+  min-height: 200px;
+  padding: 16px;
+  font-family: var(--font-mono, 'Courier New', monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: none;
+  resize: none;
+  outline: none;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.tpl-editor-readonly {
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  cursor: default;
+}
+
+.tpl-readonly-note {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* xl modal size */
+.modal-xl {
+  max-width: 820px;
+  width: 820px;
+}
+
+/* Make the tpl editor modal body stretch to fill */
+#tplEditModal .modal {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+#tplEditModal .modal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+#tplEditModal .tpl-tab-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tpl-preview-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 200px;
+  border: none;
+  background: #fff;
+}
+
+/* Indexer help button and help box */
+.idx-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-muted);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 4px;
+  vertical-align: middle;
+  line-height: 1;
+}
+.idx-help-btn:hover {
+  color: #000;
+  border-color: #000;
+}
+[data-theme="dark"] .idx-help-btn:hover {
+  color: #fff;
+  border-color: #fff;
+}
+.idx-help-box {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.idx-help-box code {
+  font-size: 11px;
+  background: var(--bg-primary);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-color);
+}

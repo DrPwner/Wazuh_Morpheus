@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% block title %}Alert Cases - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/alerts.css') }}?v=3">
+{% endblock %}
+{% block breadcrumb %}<span>Alert Cases</span>{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+  <h1 class="page-title">Alert Cases</h1>
+  <button class="btn btn-sm btn-ghost" id="refreshAlertsBtn" title="Check alerts.json for new alerts">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;">
+      <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+    </svg>
+    Refresh Alerts
+  </button>
+  <p class="page-subtitle" style="width:100%;margin:0;">Active alerts grouped by rule ID. New alerts from the same rule are merged into existing cases.</p>
+</div>
+
+<!-- Summary badges -->
+<div class="stat-row">
+  <div class="stat-card stat-open">
+    <div class="stat-value">{{ summary.get('open', 0) }}</div>
+    <div class="stat-label">Open</div>
+  </div>
+  <div class="stat-card stat-excepted">
+    <div class="stat-value">{{ summary.get('excepted', 0) }}</div>
+    <div class="stat-label">Excepted</div>
+  </div>
+  <div class="stat-card stat-suppressed">
+    <div class="stat-value">{{ summary.get('suppressed', 0) }}</div>
+    <div class="stat-label">Suppressed</div>
+  </div>
+  <div class="stat-card stat-ignored">
+    <div class="stat-value">{{ summary.get('ignored', 0) }}</div>
+    <div class="stat-label">Ignored</div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="filter-bar">
+  <form method="GET" action="{{ url_for('alerts.cases_list') }}" class="filter-form">
+    <div class="filter-group">
+      <label class="filter-label">Status</label>
+      <div class="btn-group">
+        <a href="?status=open&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="btn btn-sm {% if status_filter == 'open' %}btn-primary{% else %}btn-ghost{% endif %}">Open</a>
+        <a href="?status=all&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="btn btn-sm {% if status_filter == 'all' %}btn-primary{% else %}btn-ghost{% endif %}">All</a>
+        <a href="?status=excepted&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="btn btn-sm {% if status_filter == 'excepted' %}btn-primary{% else %}btn-ghost{% endif %}">Excepted</a>
+        <a href="?status=suppressed&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="btn btn-sm {% if status_filter == 'suppressed' %}btn-primary{% else %}btn-ghost{% endif %}">Suppressed</a>
+        <a href="?status=ignored&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="btn btn-sm {% if status_filter == 'ignored' %}btn-primary{% else %}btn-ghost{% endif %}">Ignored</a>
+      </div>
+    </div>
+    <div class="filter-group search-group">
+      <input type="text" name="q" class="form-control form-control-sm" placeholder="Search rule ID or description..."
+             value="{{ search }}" id="searchInput">
+      <input type="hidden" name="status" value="{{ status_filter }}">
+      <button type="submit" class="btn btn-sm btn-secondary">Search</button>
+    </div>
+  </form>
+</div>
+
+<!-- Bulk Action Bar (hidden until 2+ selected) -->
+<div class="bulk-action-bar" id="bulkActionBar" style="display:none">
+  <span class="bulk-count" id="bulkCount">0 selected</span>
+  <button class="btn btn-sm btn-warning" id="bulkIgnoreBtn">Ignore Selected</button>
+  <button class="btn btn-sm btn-danger" id="bulkSuppressBtn">Suppress Selected</button>
+  <button class="btn btn-sm btn-ghost" id="bulkClearBtn">Clear Selection</button>
+</div>
+
+<!-- Cases table -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">{{ total_count }} case{% if total_count != 1 %}s{% endif %}</span>
+  </div>
+  <div class="table-wrapper">
+    <table class="data-table" id="casesTable">
+      <thead>
+        <tr>
+          <th style="width:36px"><input type="checkbox" id="selectAllCases" title="Select all on this page"></th>
+          <th>
+            {% set nd = 'desc' if sort_by == 'level' and sort_dir == 'asc' else 'asc' %}
+            <a href="?status={{ status_filter }}&q={{ search }}&sort_by=level&sort_dir={{ nd }}" class="col-sort{% if sort_by == 'level' %} col-sort-active{% endif %}">
+              Level{% if sort_by == 'level' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th>
+            {% set nd = 'desc' if sort_by == 'rule_id' and sort_dir == 'asc' else 'asc' %}
+            <a href="?status={{ status_filter }}&q={{ search }}&sort_by=rule_id&sort_dir={{ nd }}" class="col-sort{% if sort_by == 'rule_id' %} col-sort-active{% endif %}">
+              Rule ID{% if sort_by == 'rule_id' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th>
+            {% set nd = 'desc' if sort_by == 'description' and sort_dir == 'asc' else 'asc' %}
+            <a href="?status={{ status_filter }}&q={{ search }}&sort_by=description&sort_dir={{ nd }}" class="col-sort{% if sort_by == 'description' %} col-sort-active{% endif %}">
+              Description{% if sort_by == 'description' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th>Agents</th>
+          <th>
+            {% set nd = 'desc' if sort_by == 'count' and sort_dir == 'asc' else 'asc' %}
+            <a href="?status={{ status_filter }}&q={{ search }}&sort_by=count&sort_dir={{ nd }}" class="col-sort{% if sort_by == 'count' %} col-sort-active{% endif %}">
+              Count{% if sort_by == 'count' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th>
+            {% set nd = 'desc' if sort_by == 'first_seen' and sort_dir == 'asc' else 'asc' %}
+            <a href="?status={{ status_filter }}&q={{ search }}&sort_by=first_seen&sort_dir={{ nd }}" class="col-sort{% if sort_by == 'first_seen' %} col-sort-active{% endif %}">
+              First Seen{% if sort_by == 'first_seen' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th>
+            {% set nd = 'desc' if sort_by == 'last_seen' and sort_dir == 'asc' else 'asc' %}
+            <a href="?status={{ status_filter }}&q={{ search }}&sort_by=last_seen&sort_dir={{ nd }}" class="col-sort{% if sort_by == 'last_seen' %} col-sort-active{% endif %}">
+              Last Seen{% if sort_by == 'last_seen' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for case in cases %}
+        <tr class="case-row" data-case-id="{{ case.id }}" data-status="{{ case.status }}">
+          <td>
+            {% if case.status == 'open' %}
+            <input type="checkbox" class="case-select-cb" data-case-id="{{ case.id }}">
+            {% endif %}
+          </td>
+          <td>
+            <span class="level-badge level-{{ case.rule_level }}">{{ case.rule_level }}</span>
+          </td>
+          <td class="font-mono">{{ case.rule_id }}</td>
+          <td class="description-cell">
+            <a href="{{ url_for('alerts.case_detail', case_id=case.id) }}" class="case-link">
+              {{ case.rule_description or 'No description' }}
+            </a>
+          </td>
+          <td class="font-mono text-sm">{{ case.agent_count }}</td>
+          <td>
+            <span class="count-badge">{{ case.total_count }}</span>
+          </td>
+          <td class="text-sm text-muted">{{ case.first_seen[:16] if case.first_seen else '-' }}</td>
+          <td class="text-sm text-muted">{{ case.last_seen[:16] if case.last_seen else '-' }}</td>
+          <td>
+            <span class="status-badge status-{{ case.status }}">{{ case.status }}</span>
+          </td>
+          <td class="actions-cell">
+            <a href="{{ url_for('alerts.case_detail', case_id=case.id) }}" class="btn btn-xs btn-ghost" title="View details">
+              View
+            </a>
+            {% if case.status == 'open' %}
+            <button class="btn btn-xs btn-ghost case-exception-btn"
+                    data-rule-id="{{ case.rule_id }}" data-case-id="{{ case.id }}" title="Create exception">
+              Exception
+            </button>
+            <button class="btn btn-xs btn-ghost ignore-btn" data-case-id="{{ case.id }}" title="Ignore this case">
+              Ignore
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="10" class="empty-state">
+            <div class="empty-content">
+              <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              <p>No alert cases found</p>
+              {% if search %}<p class="text-muted">Try a different search term</p>{% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if total_count > per_page %}
+  <div class="pagination">
+    {% if page > 1 %}
+    <a href="?status={{ status_filter }}&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&page={{ page - 1 }}" class="btn btn-sm btn-ghost">Previous</a>
+    {% endif %}
+    <span class="page-info">Page {{ page }} of {{ ((total_count - 1) // per_page) + 1 }}</span>
+    {% if has_next %}
+    <a href="?status={{ status_filter }}&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&page={{ page + 1 }}" class="btn btn-sm btn-ghost">Next</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- Ignore Modal -->
+<div class="modal-overlay" id="ignoreModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">Ignore Case</h3>
+      <button class="modal-close" id="ignoreModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted mb-2">This will mark the case as ignored. No exception or suppression will be created.</p>
+      <div class="form-group">
+        <label class="form-label">Notes <span class="text-danger">*</span></label>
+        <textarea id="ignoreNotes" class="form-control" rows="3" placeholder="Reason for ignoring..." required></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="ignoreCancelBtn">Cancel</button>
+      <button class="btn btn-warning" id="ignoreConfirmBtn">Mark as Ignored</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Ignore Modal -->
+<div class="modal-overlay" id="bulkIgnoreModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">Bulk Ignore Cases</h3>
+      <button class="modal-close" id="bulkIgnoreModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted mb-2">This will mark <strong id="bulkIgnoreCount">0</strong> selected cases as ignored.</p>
+      <div class="form-group">
+        <label class="form-label">Notes <span class="text-danger">*</span></label>
+        <textarea id="bulkIgnoreNotes" class="form-control" rows="3" placeholder="Reason for ignoring..." required></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="bulkIgnoreCancelBtn">Cancel</button>
+      <button class="btn btn-warning" id="bulkIgnoreConfirmBtn">Ignore All Selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Suppress Modal -->
+<div class="modal-overlay" id="bulkSuppressModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">Bulk Suppress Cases</h3>
+      <button class="modal-close" id="bulkSuppressModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted mb-2">This will suppress the rules for <strong id="bulkSuppressCount">0</strong> selected cases, setting their level to 0.</p>
+      <div class="form-group">
+        <label class="form-label">Notes <span class="text-danger">*</span></label>
+        <textarea id="bulkSuppressNotes" class="form-control" rows="3" placeholder="Reason for suppressing..." required></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="bulkSuppressCancelBtn">Cancel</button>
+      <button class="btn btn-danger" id="bulkSuppressConfirmBtn">Suppress All Selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- Exception Modal (case list) -->
+<div class="modal-overlay" id="listExModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">Create Exception</h3>
+      <button class="modal-close" id="listExModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Rule ID</label>
+        <input type="text" class="form-control font-mono" id="listExRuleId" readonly style="max-width:160px">
+      </div>
+      <div id="listExCommonFieldsWrap" style="display:none;margin-top:10px">
+        <div class="collapsible-header" id="listExCommonToggle">
+          <span class="chevron">&#9660;</span>
+          <span class="swatch" style="background:#22c55e"></span>
+          Common Fields <span class="text-muted" style="font-weight:400;font-size:11px">(identical across alerts — click to add)</span>
+        </div>
+        <div class="collapsible-body" id="listExCommonBody">
+          <div id="listExCommonFieldsChips" class="common-fields-chips"></div>
+        </div>
+      </div>
+      <div id="listExSimilarFieldsWrap" style="display:none;margin-top:10px">
+        <div class="collapsible-header" id="listExSimilarToggle">
+          <span class="chevron">&#9660;</span>
+          <span class="swatch" style="background:#f59e0b"></span>
+          Suggested Patterns <span class="text-muted" style="font-weight:400;font-size:11px">(common substrings — click to use as pattern)</span>
+        </div>
+        <div class="collapsible-body" id="listExSimilarBody">
+          <div id="listExSimilarFieldsChips"></div>
+        </div>
+      </div>
+      <hr class="rex-divider">
+      <div id="listExFieldGroups"></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="listExAddFieldBtn">+ Add Another Field</button>
+      <div class="form-group" style="margin-top:14px">
+        <label class="form-label">Notes <span class="text-danger">*</span></label>
+        <textarea class="form-control" id="listExNotes" rows="2" placeholder="Reason for this exception..." required></textarea>
+      </div>
+      <hr class="rex-divider" style="margin-top:16px">
+      <div class="form-group">
+        <label class="form-label">Rule XML Preview <span class="text-muted" style="font-weight:400;font-size:11px">(updates live as you add values)</span></label>
+        <div id="listExXmlPreview" class="xml-viewer" style="max-height:260px;overflow-y:auto;font-size:12px;padding:10px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:var(--radius)"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="listExCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="listExSubmitBtn">Apply Exception</button>
+    </div>
+  </div>
+</div>
+
+<!-- Exception Diff Modal (case list) -->
+<div class="modal-overlay" id="listExDiffModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">Exception Applied — Change Diff</h3>
+      <button class="modal-close" id="listExDiffModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="listExDiffContent" class="diff-viewer"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="listExDiffDoneBtn">Done</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block page_js %}
+<script src="{{ url_for('static', filename='js/xml-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/diff-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/alerts.js') }}"></script>
+{% endblock %}

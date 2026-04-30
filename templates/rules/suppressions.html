@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% block title %}Suppressions - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rules.css') }}">
+{% endblock %}
+{% block breadcrumb %}
+  <a href="{{ url_for('rules.rules_list') }}" class="breadcrumb-link">Rules</a>
+  <span class="breadcrumb-sep">/</span>
+  <span>Suppressions</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Rule Suppressions</h1>
+  <p class="page-subtitle">Suppressions set the rule level to 0, silencing all alerts from the rule.</p>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="tab-bar">
+  <a href="{{ url_for('rules.suppressions_list', tab='custom') }}" class="tab {% if active_tab == 'custom' %}active{% endif %}">Custom Rules Suppressions</a>
+  <a href="{{ url_for('rules.suppressions_list', tab='default') }}" class="tab {% if active_tab == 'default' %}active{% endif %}">Default Rules Suppressions</a>
+  <a href="{{ url_for('rules.suppressions_list', tab='history') }}" class="tab {% if active_tab == 'history' %}active{% endif %}">History</a>
+</div>
+
+<div class="filter-bar">
+  <form method="GET" action="{{ url_for('rules.suppressions_list') }}" class="filter-form">
+    <input type="hidden" name="tab" value="{{ active_tab }}">
+    <input type="text" name="q" class="form-control" placeholder="Search rule ID or description..."
+           value="{{ search }}" id="searchInput">
+    <button type="submit" class="btn btn-secondary">Search</button>
+    {% if search %}
+    <a href="{{ url_for('rules.suppressions_list', tab=active_tab) }}" class="btn btn-ghost">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+{% if active_tab == 'custom' %}
+<div class="card">
+    <div class="card-header"><span class="card-title">Suppressed Custom Rules (Level 0)</span></div>
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead><tr><th>Rule ID</th><th>Description</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for rule in custom_suppressions %}
+          <tr class="rule-suppressed">
+            <td class="font-mono">{{ rule.id }}</td>
+            <td>{{ rule.description or 'No description' }}</td>
+            <td class="actions-cell">
+              <button class="btn btn-xs btn-ghost view-xml-btn"
+                      data-rule-id="{{ rule.id }}" data-source="custom">XML</button>
+              <button class="btn btn-xs btn-ghost restore-custom-btn"
+                      data-rule-id="{{ rule.id }}"
+                      data-description="{{ rule.description | e }}"
+                      title="Restore this rule">Restore</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="empty-state">No custom rule suppressions.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if per_page and total > per_page %}
+  <div class="pagination" style="padding:12px 16px">
+    {% if page > 1 %}
+    <a href="?tab=custom&q={{ search }}&page={{ page - 1 }}" class="btn btn-sm btn-ghost">Previous</a>
+    {% endif %}
+    <span class="page-info">Page {{ page }} of {{ total_pages }} ({{ total }} suppressions)</span>
+    {% if page < total_pages %}
+    <a href="?tab=custom&q={{ search }}&page={{ page + 1 }}" class="btn btn-sm btn-ghost">Next</a>
+    {% endif %}
+    <a href="?tab=custom&q={{ search }}&all=1" class="btn btn-sm btn-ghost">View All</a>
+  </div>
+  {% elif not per_page and total > 100 %}
+  <div class="pagination" style="padding:12px 16px">
+    <span class="page-info">Showing all {{ total }} suppressions</span>
+    <a href="?tab=custom&q={{ search }}&page=1" class="btn btn-sm btn-ghost">Paginate</a>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if active_tab == 'default' %}
+<div class="card">
+    <div class="card-header">
+      <span class="card-title">Default Rule Suppressions</span>
+      <span class="card-subtitle text-muted">From suppressions.xml (overwrite + level 0)</span>
+    </div>
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead><tr><th>Rule ID</th><th>Level</th><th>Description</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for rule in default_suppressions %}
+          <tr>
+            <td class="font-mono">{{ rule.id }}</td>
+            <td><span class="level-badge level-0">0</span></td>
+            <td>{{ rule.description }}</td>
+            <td class="actions-cell">
+              <button class="btn btn-xs btn-ghost view-xml-btn"
+                      data-rule-id="{{ rule.id }}" data-source="suppressions">XML</button>
+              <button class="btn btn-xs btn-ghost restore-default-btn"
+                      data-rule-id="{{ rule.id }}"
+                      data-description="{{ rule.description | e }}"
+                      title="Remove from suppressions">Restore</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="empty-state">No default rule suppressions.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if per_page and total > per_page %}
+  <div class="pagination" style="padding:12px 16px">
+    {% if page > 1 %}
+    <a href="?tab=default&q={{ search }}&page={{ page - 1 }}" class="btn btn-sm btn-ghost">Previous</a>
+    {% endif %}
+    <span class="page-info">Page {{ page }} of {{ total_pages }} ({{ total }} suppressions)</span>
+    {% if page < total_pages %}
+    <a href="?tab=default&q={{ search }}&page={{ page + 1 }}" class="btn btn-sm btn-ghost">Next</a>
+    {% endif %}
+    <a href="?tab=default&q={{ search }}&all=1" class="btn btn-sm btn-ghost">View All</a>
+  </div>
+  {% elif not per_page and total > 100 %}
+  <div class="pagination" style="padding:12px 16px">
+    <span class="page-info">Showing all {{ total }} suppressions</span>
+    <a href="?tab=default&q={{ search }}&page=1" class="btn btn-sm btn-ghost">Paginate</a>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if active_tab == 'history' %}
+<div class="card">
+    <div class="card-header"><span class="card-title">Suppression History</span></div>
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead><tr><th>Type</th><th>Rule ID</th><th>Source</th><th>By</th><th>Date</th><th>Notes</th><th>Diff</th></tr></thead>
+        <tbody>
+          {% for action in actions %}
+          <tr>
+            <td><span class="tag">{{ action.action_type | replace('_', ' ') }}</span></td>
+            <td class="font-mono">{{ action.rule_id }}</td>
+            <td>{{ action.rule_source }}</td>
+            <td>{{ action.author or '-' }}</td>
+            <td class="text-sm text-muted">{{ action.created_at[:16] }}</td>
+            <td class="text-sm">{{ action.notes or '-' }}</td>
+            <td>
+              {% if action.diff_after %}
+              <button class="btn btn-xs btn-ghost diff-btn" data-diff="{{ action.diff_after | e }}">Diff</button>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="empty-state">No suppression history.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- XML Viewer Modal -->
+<div class="modal-overlay" id="xmlModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title" id="xmlModalTitle">Rule XML</h3>
+      <button class="modal-close" id="xmlModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="xmlContent" class="xml-viewer"></div>
+      <textarea id="xmlEditArea" style="display:none" spellcheck="false"></textarea>
+    </div>
+    <div class="modal-footer" id="xmlModalFooter">
+      <button class="btn btn-ghost" id="xmlEditRawBtn" style="display:none">Edit Raw</button>
+      <div id="xmlEditActions" style="display:none;gap:6px">
+        <button class="btn btn-ghost" id="xmlCancelEditBtn">Cancel</button>
+        <button class="btn btn-primary" id="xmlSaveRawBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Diff Modal -->
+<div class="modal-overlay" id="diffModal">
+  <div class="modal modal-lg modal-resizable">
+    <div class="modal-header">
+      <h3 class="modal-title">Change Diff</h3>
+      <button class="modal-close" id="diffModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="diffContent" class="diff-viewer"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="diffModalOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Restore Custom Rule Modal -->
+<div class="modal-overlay" id="restoreCustomModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">Restore Custom Rule</h3>
+      <button class="modal-close" id="restoreCustomModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted mb-2">Restore rule <strong id="restoreCustomRuleId"></strong> from suppression.</p>
+      <div class="form-group">
+        <label class="form-label">Restore to Level</label>
+        <select class="form-control" id="restoreCustomLevel">
+          {% for lvl, lbl in [
+            (1,  '1  — None'),
+            (2,  '2  — System low priority notification'),
+            (3,  '3  — Successful/authorized events'),
+            (4,  '4  — System low priority error'),
+            (5,  '5  — User generated error'),
+            (6,  '6  — Low relevance attack'),
+            (7,  '7  — Bad word matching'),
+            (8,  '8  — First time seen'),
+            (9,  '9  — Error from invalid source'),
+            (10, '10 — Multiple user generated errors'),
+            (11, '11 — Integrity checking warning'),
+            (12, '12 — High importance event'),
+            (13, '13 — Unusual error (higher than normal)'),
+            (14, '14 — High importance security event'),
+            (15, '15 — Severe attack')
+          ] %}
+          <option value="{{ lvl }}" {% if lvl == 8 %}selected{% endif %}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes <span class="text-danger">*</span></label>
+        <textarea class="form-control" id="restoreCustomNotes" rows="2" placeholder="Reason for restoring..." required></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="restoreCustomCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="restoreCustomSubmitBtn">Restore Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- Restore Default Rule Modal -->
+<div class="modal-overlay" id="restoreDefaultModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">Remove Default Rule Suppression</h3>
+      <button class="modal-close" id="restoreDefaultModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted mb-2">This will remove rule <strong id="restoreDefaultRuleId"></strong> from the suppressions file, restoring its original alert behaviour.</p>
+      <div class="form-group">
+        <label class="form-label">Notes <span class="text-danger">*</span></label>
+        <textarea class="form-control" id="restoreDefaultNotes" rows="2" placeholder="Reason for restoring..." required></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="restoreDefaultCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="restoreDefaultSubmitBtn">Remove Suppression</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_js %}
+<script src="{{ url_for('static', filename='js/xml-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/diff-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/rules.js') }}"></script>
+{% endblock %}

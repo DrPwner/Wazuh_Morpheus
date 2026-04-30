@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}Create Custom Rule - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rules.css') }}">
+{% endblock %}
+{% block breadcrumb %}
+  <a href="{{ url_for('rules.rules_list') }}" class="breadcrumb-link">Rules</a>
+  <span class="breadcrumb-sep">/</span>
+  <span>Create Rule</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Create Custom Rule</h1>
+  <p class="page-subtitle">Rule ID is auto-assigned as the next available ID in WazuhCustomRules.xml</p>
+</div>
+
+<div class="two-col-layout">
+  <div class="col-main">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Rule Definition</span></div>
+      <div class="card-body">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Rule ID</label>
+            <input type="number" class="form-control font-mono" id="ruleId" value="{{ next_id }}"
+                   readonly>
+            <small class="form-hint">Auto-assigned: next available ID</small>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Level</label>
+            <select class="form-control" id="ruleLevel">
+              {% for lvl, lbl in [
+                (0,  '0  — Ignored (no alert)'),
+                (1,  '1  — None'),
+                (2,  '2  — System low priority notification'),
+                (3,  '3  — Successful/authorized events'),
+                (4,  '4  — System low priority error'),
+                (5,  '5  — User generated error'),
+                (6,  '6  — Low relevance attack'),
+                (7,  '7  — Bad word matching'),
+                (8,  '8  — First time seen'),
+                (9,  '9  — Error from invalid source'),
+                (10, '10 — Multiple user generated errors'),
+                (11, '11 — Integrity checking warning'),
+                (12, '12 — High importance event'),
+                (13, '13 — Unusual error (higher than normal)'),
+                (14, '14 — High importance security event'),
+                (15, '15 — Severe attack')
+              ] %}
+              <option value="{{ lvl }}" {% if lvl == 8 %}selected{% endif %}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <input type="text" class="form-control" id="ruleDesc"
+                 placeholder="e.g. MITRE ATTACK T1082: System Information Discovery detected on $(win.system.computer)">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Trigger (if_group / if_sid)</label>
+            <select class="form-control" id="triggerType">
+              <option value="if_group">if_group</option>
+              <option value="if_sid">if_sid</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Trigger Value</label>
+            <input type="text" class="form-control" id="triggerValue" placeholder="e.g. windows">
+          </div>
+        </div>
+
+        <!-- Fields builder -->
+        <div class="form-group">
+          <label class="form-label">Field Conditions</label>
+          <div id="fieldsContainer"></div>
+          <button class="btn btn-sm btn-ghost mt-1" id="addFieldBtn" type="button">
+            + Add Field Condition
+          </button>
+        </div>
+
+        <!-- Match/Regex -->
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Match (optional)</label>
+            <input type="text" class="form-control font-mono" id="ruleMatch" placeholder="e.g. Failed password">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Match Type</label>
+            <select class="form-control" id="ruleMatchType">
+              <option value="pcre2">pcre2</option>
+              <option value="osmatch">osmatch</option>
+              <option value="osregex">osregex</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- MITRE -->
+        <div class="form-group">
+          <label class="form-label">MITRE ATT&CK IDs (comma separated)</label>
+          <input type="text" class="form-control" id="ruleMitre" placeholder="e.g. T1082, T1059">
+        </div>
+
+        <!-- Options -->
+        <div class="form-group">
+          <label class="form-label">Options</label>
+          <div class="checkbox-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="optNoFullLog" checked> no_full_log
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="optNoEmailAlert"> no_email_alert
+            </label>
+          </div>
+        </div>
+
+        <!-- Frequency -->
+        <div class="collapsible-section">
+          <button class="collapsible-toggle" type="button" id="freqToggle">
+            Advanced: Frequency / Timeframe
+          </button>
+          <div class="collapsible-body" id="freqBody" style="display:none">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">frequency</label>
+                <input type="number" class="form-control" id="ruleFrequency" min="2" placeholder="e.g. 5">
+              </div>
+              <div class="form-group">
+                <label class="form-label">timeframe (seconds)</label>
+                <input type="number" class="form-control" id="ruleTimeframe" min="1" placeholder="e.g. 120">
+              </div>
+              <div class="form-group">
+                <label class="form-label">ignore (seconds)</label>
+                <input type="number" class="form-control" id="ruleIgnore" min="0" placeholder="e.g. 3600">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" type="button" id="submitRuleBtn">Create Rule</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-side">
+    <div class="card sticky-card">
+      <div class="card-header"><span class="card-title">XML Preview</span></div>
+      <div class="card-body p-0">
+        <div id="rulePreviewXml" class="xml-viewer p-3">
+          <p class="text-muted text-sm">Fill the form to see a preview...</p>
+        </div>
+      </div>
+    </div>
+    <div class="card mt-2">
+      <div class="card-header"><span class="card-title">Field Condition Tips</span></div>
+      <div class="card-body text-sm">
+        <ul class="help-list">
+          <li>Use <code>pcre2</code> for most conditions — supports full Perl regex syntax</li>
+          <li>Wrap values in <code>(?i)(value1|value2)</code> for case-insensitive OR matching</li>
+          <li>Check <code>negate</code> to exclude events where the field matches</li>
+          <li>Multiple field conditions are evaluated with AND logic</li>
+          <li>Common fields: <code>win.eventdata.commandLine</code>, <code>win.eventdata.parentImage</code>, <code>win.system.eventID</code></li>
+        </ul>
+      </div>
+    </div>
+    <div class="card mt-2">
+      <div class="card-header"><span class="card-title">Frequency / Timeframe Notes</span></div>
+      <div class="card-body text-sm">
+        <ul class="help-list">
+          <li><code>frequency</code> — number of matching events required to trigger (2 to 9999)</li>
+          <li><code>timeframe</code> — time window in seconds (1 to 99999)</li>
+          <li><code>ignore</code> — seconds to ignore rule after it fires (1 to 999999)</li>
+          <li>Requires <code>if_matched_sid</code> or <code>if_matched_group</code> when used</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_js %}
+<script src="{{ url_for('static', filename='js/xml-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/rules.js') }}"></script>
+{% endblock %}

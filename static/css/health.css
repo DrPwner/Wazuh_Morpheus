@@ -1,0 +1,170 @@
+/* health.css */
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.health-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.health-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.health-card-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+.health-card-value { font-size: 22px; font-weight: 700; }
+.health-card-detail { margin-top: 4px; }
+.status-indicator { display: flex; align-items: center; }
+
+.service-active .health-card-value { color: var(--success-text); }
+.service-inactive .health-card-value { color: var(--danger-text); }
+
+.health-stats { display: flex; gap: 20px; margin-top: 4px; }
+.health-stat { text-align: center; }
+.stat-num { font-size: 18px; font-weight: 700; }
+.stat-lbl { font-size: 10px; color: var(--text-muted); }
+.health-pct { font-size: 18px; font-weight: 700; }
+
+.service-output {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-primary);
+  padding: 16px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  color: var(--text-secondary);
+}
+
+/* Disk bars */
+.disk-item { margin-bottom: 14px; }
+.disk-item:last-child { margin-bottom: 0; }
+
+.disk-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+  flex-wrap: wrap;
+}
+.disk-mount {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.disk-fstype {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+.disk-device {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.disk-pct {
+  font-size: 13px;
+  font-weight: 700;
+  margin-left: auto;
+  white-space: nowrap;
+  min-width: 48px;
+  text-align: right;
+}
+.disk-pct-warn { color: var(--warning-text, #faad14); }
+.disk-pct-danger { color: var(--danger-text, #ff4d4f); }
+.disk-detail {
+  font-size: 11px;
+  margin-top: 4px;
+  letter-spacing: 0.1px;
+}
+.disk-info { color: var(--text-muted); }
+
+/* Indexer cards */
+.indexer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+.indexer-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.idx-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.idx-name { font-size: 14px; font-weight: 600; }
+.idx-url { margin-bottom: 10px; font-size: 11px; word-break: break-all; }
+
+.cluster-status-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.idx-status-green  { background: #dcfce7; color: #166534; }
+.idx-status-yellow { background: #fef9c3; color: #854d0e; }
+.idx-status-red    { background: #fde2e2; color: #991b1b; }
+.idx-status-unknown { background: var(--bg-elevated); color: var(--text-muted); }
+
+.idx-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.idx-stat { text-align: center; }
+.idx-stat-val { display: block; font-size: 16px; font-weight: 700; }
+.idx-stat-lbl { font-size: 10px; color: var(--text-muted); }
+
+.idx-freshness {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.freshness-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.idx-fresh { background: #dcfce7; color: #166534; }
+.idx-stale { background: #fef9c3; color: #854d0e; }
+
+.idx-error {
+  background: #fde2e2;
+  color: #991b1b;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+.idx-checked { font-size: 10px; }
+.idx-ts { font-size: 11px; }
+
+/* CPU chart height override */
+#cpuChart { height: 100px; }

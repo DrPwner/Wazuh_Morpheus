@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+{% block title %}Case #{{ case.id }} - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/alerts.css') }}?v=3">
+{% endblock %}
+{% block breadcrumb %}
+  <a href="{{ url_for('alerts.cases_list') }}" class="breadcrumb-link">Alert Cases</a>
+  <span class="breadcrumb-sep">/</span>
+  <span>Case #{{ case.id }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">
+      Case #{{ case.id }}
+      <span class="level-badge level-{{ case.rule_level }}">Level {{ case.rule_level }}</span>
+      <span class="status-badge status-{{ case.status }}">{{ case.status }}</span>
+    </h1>
+    <p class="page-subtitle font-mono">Rule ID: {{ case.rule_id }}</p>
+  </div>
+  <div class="page-header-right">
+    {% if case.status == 'open' %}
+    <div class="btn-group">
+      <button class="btn btn-primary" id="exceptionBtn">Create Exception</button>
+      <button class="btn btn-secondary" id="suppressionBtn">Suppress</button>
+      <button class="btn btn-ghost" id="ignoreBtn">Ignore</button>
+    </div>
+    {% else %}
+    <button class="btn btn-ghost" id="reopenBtn">Reopen Case</button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="detail-grid">
+  <!-- Case info -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Case Information</span></div>
+    <div class="card-body">
+      <dl class="info-list">
+        <dt>Description</dt>
+        <dd>{{ case.rule_description or 'No description available' }}</dd>
+        <dt>Rule ID</dt>
+        <dd class="font-mono">{{ case.rule_id }}</dd>
+        <dt>Level</dt>
+        <dd><span class="level-badge level-{{ case.rule_level }}">{{ case.rule_level }}</span></dd>
+        <dt>First Seen</dt>
+        <dd>{{ case.first_seen }}</dd>
+        <dt>Last Seen</dt>
+        <dd>{{ case.last_seen }}</dd>
+        <dt>Total Events</dt>
+        <dd>{{ case.total_count }}</dd>
+        {% if case.notes %}
+        <dt>Notes</dt>
+        <dd>{{ case.notes }}</dd>
+        {% endif %}
+        {% if case.closed_at %}
+        <dt>Closed</dt>
+        <dd>{{ case.closed_at }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+
+  <!-- Rule Logic -->
+  {% if rule_xml %}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Rule Logic</span>
+      {% if session.get('is_root') or 'edit_raw_xml' in session.get('permissions', []) %}
+      <button class="btn btn-xs btn-ghost" id="editRawBtn">Edit Raw</button>
+      {% endif %}
+    </div>
+    <div class="card-body p-0">
+      <div class="xml-viewer" id="ruleLogicXml" style="padding:10px 12px;overflow-x:auto"></div>
+      <div id="ruleRawEditWrap" style="display:none">
+        <textarea id="ruleRawXml" rows="14" spellcheck="false"></textarea>
+        <div class="form-actions mt-1" style="padding:0 12px 10px">
+          <button class="btn btn-ghost btn-sm" id="cancelRawEditBtn">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="saveRawEditBtn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Exception builder -->
+{% if case.status == 'open' %}
+<div class="card" id="exceptionBuilder" style="display:none">
+  <div class="card-header">
+    <span class="card-title">Create Exception</span>
+    <span class="card-subtitle text-muted">
+      Rule {{ case.rule_id }} is a
+      {% if case.rule_id | int < 100000 %}
+      <span class="badge badge-info">Default Rule</span> — copied to exceptions file with <code>overwrite="yes"</code>
+      {% else %}
+      <span class="badge badge-success">Custom Rule</span> — negate field added directly
+      {% endif %}
+    </span>
+  </div>
+  <div class="card-body">
+
+    <!-- Common fields summary (collapsed by default) -->
+    {% if common_fields %}
+    <div class="ex-varying-summary">
+      <div class="collapsible-header collapsed" data-collapse="detailExCommon">
+        <span class="chevron">&#9660;</span>
+        <span class="swatch" style="background:#22c55e"></span>
+        Common fields <span class="text-muted" style="font-weight:400;font-size:11px">(identical value across all {{ case.total_count }} alerts — click to add)</span>
+      </div>
+      <div class="collapsible-body" id="detailExCommon">
+        <div class="ex-varying-chips" style="margin-top:6px">
+          {% for field, value in common_fields.items() %}
+          <button class="ex-vary-chip" data-field="{{ field }}" data-value="{{ value }}" title="{{ value[:80] }}">
+            {{ field }}
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Similar field suggestions (expanded by default) -->
+    {% if similar_fields %}
+    <div class="ex-varying-summary" style="margin-top:10px">
+      <div class="collapsible-header" data-collapse="detailExSimilar">
+        <span class="chevron">&#9660;</span>
+        <span class="swatch" style="background:#f59e0b"></span>
+        Suggested patterns <span class="text-muted" style="font-weight:400;font-size:11px">(common substrings — click to use as pattern)</span>
+      </div>
+      <div class="collapsible-body" id="detailExSimilar">
+        {% for field, substrings in similar_fields.items() %}
+        <div style="margin-bottom:8px;margin-top:6px">
+          <span class="font-mono text-sm" style="color:var(--text-secondary)">{{ field }}:</span>
+          {% for sub in substrings %}
+          <button class="ex-vary-chip" data-field="{{ field }}" data-value="{{ sub }}" title="Use '{{ sub }}' as negation pattern for {{ field }}">
+            {{ sub }}
+          </button>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Match type -->
+    <div class="form-row mb-2">
+      <div class="form-group">
+        <label class="form-label">Match Type</label>
+        <select class="form-control" id="exMatchType" style="max-width:220px">
+          <option value="pcre2">PCRE2 (recommended)</option>
+          <option value="osmatch">OS Match</option>
+          <option value="osregex">OS Regex</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Dynamic exception rows -->
+    <div class="form-label">Fields to Negate</div>
+    <div id="exceptionEntriesList" class="exception-entries-list"></div>
+    <button class="btn btn-ghost btn-sm mt-1" id="addExceptionRowBtn" type="button">+ Add Another Field</button>
+
+    <div class="form-group mt-2">
+      <label class="form-label">Notes <span class="text-danger">*</span></label>
+      <textarea class="form-control" id="exNotes" rows="2" placeholder="Reason for this exception..." required></textarea>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-ghost" id="exCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="exSubmitBtn">Apply Exception</button>
+    </div>
+  </div>
+</div>
+
+<!-- Suppression builder -->
+<div class="card" id="suppressionBuilder" style="display:none">
+  <div class="card-header">
+    <span class="card-title">Suppress Rule</span>
+    <span class="card-subtitle text-muted">Set rule level to 0 to silence all alerts from this rule</span>
+  </div>
+  <div class="card-body">
+    <div class="alert alert-warning">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      Suppression sets the rule level to 0 and adds noalert="1". This will silence ALL alerts from rule {{ case.rule_id }}.
+    </div>
+    <div class="form-hint mb-2">
+      Rule <strong>{{ case.rule_id }}</strong> is automatically classified as a
+      {% if case.rule_id | int < 100000 %}
+      <span class="badge badge-info">Default Rule</span> — the rule will be copied into <code>suppressions.xml</code> with <code>overwrite="yes"</code> and <code>level="0"</code>.
+      {% else %}
+      <span class="badge badge-success">Custom Rule</span> — the rule level will be set to 0 directly in the custom rules file.
+      {% endif %}
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes <span class="text-danger">*</span></label>
+      <textarea class="form-control" id="supNotes" rows="2" placeholder="Reason for suppressing..." required></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" id="supCancelBtn">Cancel</button>
+      <button class="btn btn-danger" id="supSubmitBtn">Apply Suppression</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Events list -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Alert Events ({{ case.total_count }} total)</span>
+    {% if case.total_count > 100 %}
+    <span class="card-subtitle text-muted">Showing {{ events | length }} of {{ case.total_count }}</span>
+    {% endif %}
+  </div>
+  {% if common_fields or similar_fields %}
+  <div class="field-legend" style="padding:6px 12px">
+    {% if common_fields %}
+    <div class="field-legend-item field-legend-toggle" data-highlight="common" title="Click to toggle highlighting">
+      <span class="field-legend-swatch swatch-common"></span> Common field (identical across alerts)
+    </div>
+    {% endif %}
+    {% if similar_fields %}
+    <div class="field-legend-item field-legend-toggle" data-highlight="similar" title="Click to toggle highlighting">
+      <span class="field-legend-swatch swatch-similar"></span> Suggested pattern (common substring)
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+  <div class="event-columns-header">
+    {% for col in event_columns %}
+    <span class="event-col-label">{{ col.label }}</span>
+    {% endfor %}
+  </div>
+  <div id="eventsAccordion">
+    {% for item in events %}
+    <div class="event-item">
+      <div class="event-header" data-event-index="{{ loop.index }}">
+        <div class="event-meta">
+          {% for col in event_columns %}
+          <span class="event-col font-mono">{{ item | resolve_event_col(col.field) }}</span>
+          {% endfor %}
+        </div>
+        <button class="event-toggle">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </div>
+      <div class="event-body" id="event-body-{{ loop.index }}" style="display:none">
+        <div class="event-fields">
+          {% if item.parsed %}
+          {% for key, val in item.parsed | flatten_dict %}
+          {% set is_common = key in common_fields %}
+          {% set is_similar = key in similar_fields %}
+          <div class="field-row{% if is_common %} field-common{% elif is_similar %} field-similar{% endif %}">
+            <span class="field-key font-mono">{{ key }}</span>
+            <span class="field-val" {% if is_similar %}data-similar="{{ similar_fields[key] | join(',') }}"{% endif %}>{{ val }}</span>
+            {% if case.status == 'open' %}
+            <button class="btn btn-xs btn-ghost use-field-btn"
+                    data-field="{{ key }}" data-value="{{ val }}" title="Use this field for exception">
+              Use
+            </button>
+            {% endif %}
+          </div>
+          {% endfor %}
+          {% endif %}
+        </div>
+        <details class="raw-json-details">
+          <summary>Raw JSON</summary>
+          <pre class="raw-json">{{ item.event.raw_json | pretty_json }}</pre>
+        </details>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% if case.total_count > events | length %}
+  <div style="padding:12px 16px;text-align:center">
+    <button class="btn btn-sm btn-ghost" id="loadAllEventsBtn">Load All {{ case.total_count }} Events</button>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Existing actions on this rule -->
+{% if actions %}
+<div class="card">
+  <div class="card-header"><span class="card-title">Existing Actions on Rule {{ case.rule_id }}</span></div>
+  <div class="table-wrapper" {% if actions | length > 5 %}style="max-height:280px;overflow-y:auto;resize:vertical"{% endif %}>
+    <table class="data-table">
+      <thead>
+        <tr><th>Type</th><th>Field</th><th>Value</th><th>Source</th><th>Created By</th><th>Date</th><th>Diff</th></tr>
+      </thead>
+      <tbody>
+        {% for action in actions %}
+        <tr>
+          <td><span class="tag tag-{{ action.action_type }}">{{ action.action_type | replace('_', ' ') }}</span></td>
+          <td class="font-mono text-sm">{{ action.field_name or '-' }}</td>
+          <td class="font-mono text-sm">{{ action.field_value or '-' }}</td>
+          <td>{{ action.rule_source }}</td>
+          <td>{{ action.author or '-' }}</td>
+          <td class="text-sm text-muted">{{ action.created_at[:16] }}</td>
+          <td>
+            {% if action.diff_after %}
+            <button class="btn btn-xs btn-ghost diff-btn" data-diff="{{ action.diff_after | e }}">View Diff</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Diff Viewer Modal -->
+<div class="modal-overlay" id="diffModal">
+  <div class="modal modal-lg modal-resizable">
+    <div class="modal-header">
+      <h3 class="modal-title">Change Diff</h3>
+      <button class="modal-close" id="diffModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="diffContent" class="diff-viewer"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="diffModalOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ignore Modal -->
+<div class="modal-overlay" id="ignoreModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">Ignore Case</h3>
+      <button class="modal-close" id="ignoreModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted mb-2">This will mark the case as ignored. No exception or suppression will be created.</p>
+      <div class="form-group">
+        <label class="form-label">Notes <span class="text-danger">*</span></label>
+        <textarea id="ignoreNotes" class="form-control" rows="3" placeholder="Reason for ignoring..." required></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="ignoreCancelBtn">Cancel</button>
+      <button class="btn btn-warning" id="ignoreConfirmBtn">Mark as Ignored</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden data for JS -->
+<script>
+window.CASE_ID = {{ case.id }};
+window.RULE_ID = '{{ case.rule_id }}';
+window.CASE_STATUS = '{{ case.status }}';
+window.ALERT_FIELDS = {{ all_fields | tojson }};
+window.COMMON_FIELDS = {{ common_fields | tojson }};
+window.SIMILAR_FIELDS = {{ similar_fields | tojson }};
+window.RULE_XML = {{ rule_xml | tojson }};
+window.EVENT_COLUMNS = {{ event_columns | tojson }};
+</script>
+
+{% endblock %}
+{% block page_js %}
+<script src="{{ url_for('static', filename='js/xml-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/diff-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/alerts.js') }}"></script>
+<script>
+(function () {
+  var el = document.getElementById('ruleLogicXml');
+  if (el && window.RULE_XML) {
+    el.innerHTML = highlightXml(escapeHtml(window.RULE_XML));
+  }
+})();
+</script>
+{% endblock %}

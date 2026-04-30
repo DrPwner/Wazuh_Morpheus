@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Integration - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+{% endblock %}
+{% block breadcrumb %}<span>Settings</span> / <span>Integration</span>{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+  <h1 class="page-title">Integration &amp; Automation</h1>
+  <button type="button" class="idx-help-btn" id="integrationHelpBtn" title="What is this?">?</button>
+</div>
+
+<div id="integrationHelpBox" class="idx-help-box" style="display:none;margin-bottom:1.25rem;">
+  <strong>What does this feature do?</strong>
+  <p style="margin:6px 0 0">
+    When enabled, a <strong>Resolution</strong> dropdown is injected into every action modal
+    (Ignore, Bulk Ignore, Bulk Suppress, Create Exception, Create Suppression).
+    The user must select a resolution category before the action can be submitted.
+  </p>
+  <p style="margin:8px 0 0">
+    After the action succeeds, a <strong>webhook POST</strong> is fired to the configured URL
+    (e.g. a Logic App endpoint) so your external ticketing system can automatically close
+    or update the corresponding ticket. If no webhook URL is configured, the resolution
+    dropdown still appears and the value is validated &mdash; the webhook simply does not fire.
+  </p>
+
+  <strong style="display:block;margin-top:12px;">Webhook payload (JSON)</strong>
+  <p style="margin:4px 0 0">Every webhook delivery sends a JSON body with these fields:</p>
+  <table style="width:100%;margin-top:6px;font-size:12px;border-collapse:collapse;">
+    <tr><td style="padding:2px 8px 2px 0;white-space:nowrap;"><code>action</code></td>
+        <td>Event type: <code>case_ignored</code>, <code>exception_created</code>, <code>suppression_created</code>, <code>bulk_ignore</code>, or <code>bulk_suppress</code></td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>rule_id</code></td>
+        <td>The Wazuh rule ID involved in the action</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>rule_description</code></td>
+        <td>Human-readable description of the rule</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>notes</code></td>
+        <td>Free-text notes entered by the analyst</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>resolution</code></td>
+        <td>Selected resolution category (e.g. "False Positive")</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>username</code></td>
+        <td>The platform user who performed the action</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>timestamp</code></td>
+        <td>UTC timestamp in ISO 8601 format</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>case_id</code></td>
+        <td>Alert case ID (single actions only)</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>case_ids</code></td>
+        <td>Array of case IDs (bulk actions only)</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>rule_ids</code></td>
+        <td>Array of rule IDs (bulk actions only)</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>field_name</code></td>
+        <td>Exception field path (exceptions only)</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>field_value</code></td>
+        <td>Exception field value/pattern (exceptions only)</td></tr>
+  </table>
+
+  <strong style="display:block;margin-top:12px;">Example payload</strong>
+  <pre style="margin:4px 0 0;padding:8px 10px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:4px;font-size:11px;overflow-x:auto;">{
+  "action": "case_ignored",
+  "rule_id": "60204",
+  "rule_description": "Windows Logon Success",
+  "notes": "Known admin activity on jump server",
+  "resolution": "False Positive",
+  "username": "jsmith",
+  "timestamp": "2026-04-30T14:23:00",
+  "case_id": 42
+}</pre>
+
+  <strong style="display:block;margin-top:12px;">Configuration summary</strong>
+  <ul style="margin:4px 0 0;padding-left:18px;">
+    <li><strong>Webhook URL</strong> &mdash; The HTTP(S) endpoint that receives the POST (e.g. Azure Logic App trigger URL).</li>
+    <li><strong>Auth Type</strong> &mdash; <em>Bearer Token</em> sends <code>Authorization: Bearer &lt;token&gt;</code>. <em>Custom Header</em> lets you specify a custom header name (e.g. <code>X-Api-Key</code>).</li>
+    <li><strong>Timeout / Retry</strong> &mdash; Each delivery attempt times out after N seconds. Failed attempts are retried up to the configured count.</li>
+    <li><strong>Resolution Categories</strong> &mdash; The dropdown options shown to analysts. Customize them to match your ticketing workflow.</li>
+    <li><strong>Webhook Events</strong> &mdash; Toggle which action types fire a webhook. Disabled events still require a resolution selection but skip the HTTP call.</li>
+    <li><strong>Recent Deliveries</strong> &mdash; A log of all webhook attempts with HTTP status, success/failure, and any error messages for debugging.</li>
+  </ul>
+</div>
+
+<div class="settings-layout">
+
+  <!-- Webhook Configuration -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Webhook Configuration</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" id="integrationEnabled" {% if config.integration.enabled %}checked{% endif %}>
+          Enable webhook integration
+        </label>
+      </div>
+
+      <div id="integrationFields" style="display:{{ 'block' if config.integration.enabled else 'none' }}">
+        <div class="form-group">
+          <label class="form-label">Webhook URL</label>
+          <input type="url" class="form-control font-mono" id="integrationUrl"
+                 value="{{ config.integration.webhook_url }}"
+                 placeholder="https://prod-XX.logic.azure.com/workflows/...">
+        </div>
+
+        <div class="form-row" style="display:flex;gap:1rem;">
+          <div class="form-group" style="flex:1">
+            <label class="form-label">Auth Type</label>
+            <select class="form-control" id="integrationAuthType">
+              <option value="bearer" {% if config.integration.auth_type == 'bearer' %}selected{% endif %}>Bearer Token</option>
+              <option value="custom" {% if config.integration.auth_type == 'custom' %}selected{% endif %}>Custom Header</option>
+            </select>
+          </div>
+          <div class="form-group" id="customHeaderGroup" style="flex:1;display:{{ 'block' if config.integration.auth_type == 'custom' else 'none' }}">
+            <label class="form-label">Header Name</label>
+            <input type="text" class="form-control" id="integrationAuthHeaderName"
+                   value="{{ config.integration.auth_header_name }}" placeholder="X-Api-Key">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Auth Token</label>
+          <input type="password" class="form-control font-mono" id="integrationAuthToken"
+                 value="{{ config.integration.auth_token }}" placeholder="Token or API key">
+        </div>
+
+        <div class="form-row" style="display:flex;gap:1rem;">
+          <div class="form-group" style="flex:1">
+            <label class="form-label">Timeout (seconds)</label>
+            <input type="number" class="form-control" id="integrationTimeout"
+                   value="{{ config.integration.timeout_seconds }}" min="1" max="60">
+          </div>
+          <div class="form-group" style="flex:1">
+            <label class="form-label">Retry Count</label>
+            <input type="number" class="form-control" id="integrationRetry"
+                   value="{{ config.integration.retry_count }}" min="0" max="5">
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+          <button class="btn btn-primary" id="integrationSaveBtn">Save Configuration</button>
+          <button class="btn btn-ghost" id="integrationTestBtn">Test Webhook</button>
+        </div>
+        <div id="integrationTestResult" style="margin-top:0.5rem;display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resolution Categories -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Resolution Categories</span>
+      <span class="card-subtitle text-muted">Options shown in the Resolution dropdown when acting on cases</span>
+    </div>
+    <div class="card-body">
+      <div id="resolutionList">
+        {% for opt in config.integration.resolution_options %}
+        <div class="resolution-item" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
+          <input type="text" class="form-control resolution-input" value="{{ opt }}" style="flex:1">
+          <button class="btn btn-ghost btn-sm resolution-remove-btn" title="Remove">&times;</button>
+        </div>
+        {% endfor %}
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.75rem;">
+        <button class="btn btn-ghost btn-sm" id="resolutionAddBtn">+ Add Option</button>
+        <button class="btn btn-primary btn-sm" id="resolutionSaveBtn">Save Categories</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Webhook Events -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Webhook Events</span>
+      <span class="card-subtitle text-muted">Choose which actions trigger a webhook delivery</span>
+    </div>
+    <div class="card-body">
+      {% set events = config.integration.get('webhook_events', {}) %}
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" class="webhook-event-cb" data-event="case_ignored"
+                 {% if events.get('case_ignored', true) %}checked{% endif %}>
+          Case Ignored
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" class="webhook-event-cb" data-event="exception_created"
+                 {% if events.get('exception_created', true) %}checked{% endif %}>
+          Exception Created
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" class="webhook-event-cb" data-event="suppression_created"
+                 {% if events.get('suppression_created', true) %}checked{% endif %}>
+          Suppression Created
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" class="webhook-event-cb" data-event="bulk_ignore"
+                 {% if events.get('bulk_ignore', true) %}checked{% endif %}>
+          Bulk Ignore
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" class="webhook-event-cb" data-event="bulk_suppress"
+                 {% if events.get('bulk_suppress', true) %}checked{% endif %}>
+          Bulk Suppress
+        </label>
+      </div>
+      <button class="btn btn-primary btn-sm" id="webhookEventsSaveBtn" style="margin-top:0.5rem;">Save Events</button>
+    </div>
+  </div>
+
+  <!-- Recent Deliveries -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Recent Deliveries</span>
+      <button class="btn btn-ghost btn-sm" id="webhookLogsRefreshBtn" style="margin-left:auto;">Refresh</button>
+    </div>
+    <div class="card-body">
+      <div class="table-wrap" style="max-height:400px;overflow-y:auto;">
+        <table class="data-table" id="webhookLogsTable">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Event</th>
+              <th>Rule ID</th>
+              <th>Resolution</th>
+              <th>HTTP Status</th>
+              <th>Success</th>
+              <th>Error</th>
+            </tr>
+          </thead>
+          <tbody id="webhookLogsBody">
+            <tr><td colspan="7" class="text-muted" style="text-align:center;">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block page_js %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

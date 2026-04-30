@@ -1,0 +1,686 @@
+{% extends "base.html" %}
+{% block title %}Settings - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+{% endblock %}
+{% block breadcrumb %}<span>Settings</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Settings</h1>
+</div>
+
+<div class="settings-layout">
+
+  <!-- Wazuh Paths -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Wazuh File Paths</span>
+      <span class="card-subtitle text-muted">Both Linux (<code>/var/ossec/...</code>) and Windows (<code>C:\path\...</code>) paths are supported</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label">Alerts JSON Path</label>
+        <input type="text" class="form-control font-mono" id="alertsPath"
+               value="{{ config.wazuh.alerts_json_path }}"
+               placeholder="/var/ossec/logs/alerts/alerts.json">
+        <small class="form-hint">Real-time alert log file. Changes take effect after saving — no restart needed.</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Default Rules Directory</label>
+        <input type="text" class="form-control font-mono" id="defaultRulesPath"
+               value="{{ config.wazuh.default_rules_path }}"
+               placeholder="/var/ossec/ruleset/rules/">
+        <small class="form-hint">Directory containing built-in Wazuh rule files (*.xml)</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Custom Rules File</label>
+        <input type="text" class="form-control font-mono" id="customRulesPath"
+               value="{{ config.wazuh.custom_rules_path }}"
+               placeholder="/var/ossec/etc/rules/customrulesfile.xml">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Default Rules Suppression File</label>
+        <input type="text" class="form-control font-mono" id="suppressionsPath"
+               value="{{ config.wazuh.suppressions_path }}"
+               placeholder="/var/ossec/etc/rules/suppressions.xml">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Default Rules Exceptions File</label>
+        <input type="text" class="form-control font-mono" id="exceptionsPath"
+               value="{{ config.wazuh.default_rules_exceptions_path }}"
+               placeholder="/var/ossec/etc/rules/default_rules_exceptions.xml">
+      </div>
+      <hr class="section-divider">
+      <div class="form-group">
+        <label class="form-label">Archives JSON Path</label>
+        <input type="text" class="form-control font-mono" id="archivesPath"
+               value="{{ config.wazuh.get('archives_json_path', '') }}"
+               placeholder="/var/ossec/logs/archives/archives.json">
+        <small class="form-hint">Path to archives.json for no-log gap detection. Leave empty to disable.</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label">No-Log Alert Threshold (seconds)</label>
+        <input type="number" class="form-control" id="noLogAlertSeconds"
+               value="{{ config.wazuh.get('no_log_alert_seconds', 300) }}"
+               min="10" placeholder="300">
+        <small class="form-hint">Send an alert if no entries appear in archives.json within this many seconds. Common values: 60, 300 (5 min), 600 (10 min), 1800 (30 min).</small>
+      </div>
+      <button class="btn btn-primary" id="savePathsBtn">Save Paths</button>
+    </div>
+  </div>
+
+  <!-- Silenced Fields -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Field Silence List</span>
+      <span class="card-subtitle text-muted">Fields in this list are hidden from alert event displays, exception builder dropdown (in Alert Cases Page), and Common Fields.</span>
+    </div>
+    <div class="card-body">
+      <div class="silence-field-row">
+        <input type="text" class="form-control font-mono" id="silenceFieldInput" placeholder="e.g. data.win.system.processID" autocomplete="off">
+        <button class="btn btn-secondary" id="addSilenceFieldBtn" type="button">Add</button>
+      </div>
+      <div id="silenceFieldList" class="silence-list mt-2">
+        {% for field in config.wazuh.silenced_fields %}
+        <div class="silence-item" data-field="{{ field }}">
+          <span class="font-mono text-sm">{{ field }}</span>
+          <button class="btn btn-xs btn-ghost silence-remove-btn" data-field="{{ field }}">Remove</button>
+        </div>
+        {% else %}
+        <div class="text-muted text-sm" id="silenceEmptyMsg">No fields silenced.</div>
+        {% endfor %}
+      </div>
+      <button class="btn btn-primary mt-2" id="saveSilencedFieldsBtn">Save Silence List</button>
+    </div>
+  </div>
+
+  <!-- Alert Event Columns -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Alert Event Columns</span>
+      <span class="card-subtitle text-muted">Configure which columns appear in the event accordion on the alert detail page</span>
+    </div>
+    <div class="card-body">
+      <div id="eventColumnsList">
+        {% for col in config.get('alerts', {}).get('event_columns', []) %}
+        <div class="silence-item" data-field="{{ col.field }}" data-label="{{ col.label }}">
+          <span class="font-mono text-sm">{{ col.field }}</span>
+          <span class="text-muted text-sm" style="margin-left:8px">{{ col.label }}</span>
+          <button class="btn btn-xs btn-ghost event-col-remove-btn" type="button">Remove</button>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="silence-field-row mt-2" style="align-items:flex-start">
+        <div class="search-dropdown" id="eventColFieldWrap" style="flex:1">
+          <input type="text" class="form-control font-mono search-dropdown-input" id="eventColFieldInput" placeholder="Search or type field..." autocomplete="off">
+          <div class="search-dropdown-list" id="eventColFieldList"></div>
+        </div>
+        <input type="text" class="form-control" id="eventColLabelInput" placeholder="Label, e.g. Event ID" autocomplete="off" style="flex:1">
+        <button class="btn btn-secondary" id="addEventColBtn" type="button">Add</button>
+      </div>
+      <button class="btn btn-primary mt-2" id="saveEventColsBtn">Save Columns</button>
+    </div>
+  </div>
+
+  <!-- Email -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Email Notifications</span>
+    </div>
+    <div class="card-body">
+      <div class="toggle-row">
+        <label class="form-label">Enable Email Notifications</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="emailEnabled" {% if config.email.enabled %}checked{% endif %}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div id="emailFields" {% if not config.email.enabled %}style="display:none"{% endif %}>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">SMTP Host</label>
+            <input type="text" class="form-control" id="smtpHost" value="{{ config.email.smtp_host }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">SMTP Port</label>
+            <input type="number" class="form-control" id="smtpPort" value="{{ config.email.smtp_port }}" min="1" max="65535">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">SMTP Username</label>
+            <input type="text" class="form-control" id="smtpUser" value="{{ config.email.smtp_user }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">SMTP Password</label>
+            <input type="password" class="form-control" id="smtpPassword" placeholder="(unchanged)">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">From Address</label>
+            <input type="email" class="form-control" id="fromAddress" value="{{ config.email.from_address }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" id="smtpTls" {% if config.email.smtp_tls %}checked{% endif %}> Use TLS (STARTTLS)
+            </label>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="saveEmailBtn">Save Email Settings</button>
+        </div>
+        <hr style="margin:16px 0;border-color:var(--border-color)">
+        <div class="form-group">
+          <label class="form-label">Test Recipient</label>
+          <input type="email" class="form-control font-mono" id="smtpTestRecipient"
+                 placeholder="your-email@example.com">
+          <small class="form-hint">Enter an email address to send a test email to. This is not saved.</small>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="testEmailBtn">Send Test Email</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Postfix Relay -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Postfix Relay</span>
+      <span class="card-subtitle text-muted">Send notifications via a local Postfix/MTA relay (no authentication required)</span>
+    </div>
+    <div class="card-body">
+      <div class="toggle-row">
+        <label class="form-label">Enable Postfix Relay</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="postfixEnabled" {% if config.get('postfix', {}).get('enabled') %}checked{% endif %}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div id="postfixFields" {% if not config.get('postfix', {}).get('enabled') %}style="display:none"{% endif %}>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Host</label>
+            <input type="text" class="form-control" id="postfixHost" value="{{ config.get('postfix', {}).get('host', 'localhost') }}" placeholder="localhost">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Port</label>
+            <input type="number" class="form-control" id="postfixPort" value="{{ config.get('postfix', {}).get('port', 25) }}" min="1" max="65535">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">From Address</label>
+            <input type="email" class="form-control" id="postfixFromAddress" value="{{ config.get('postfix', {}).get('from_address', '') }}" placeholder="noreply@yourdomain.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" id="postfixTls" {% if config.get('postfix', {}).get('use_tls') %}checked{% endif %}> Use TLS (STARTTLS)
+            </label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Username <span class="text-muted" style="font-weight:400;font-size:11px">(optional)</span></label>
+            <input type="text" class="form-control" id="postfixUsername" value="{{ config.get('postfix', {}).get('username', '') }}" placeholder="Leave empty if not required">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password <span class="text-muted" style="font-weight:400;font-size:11px">(optional)</span></label>
+            <input type="password" class="form-control" id="postfixPassword" placeholder="(unchanged)">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="savePostfixBtn">Save Postfix Settings</button>
+        </div>
+        <hr style="margin:16px 0;border-color:var(--border-color)">
+        <div class="form-group">
+          <label class="form-label">Test Recipient</label>
+          <input type="email" class="form-control font-mono" id="postfixTestRecipient"
+                 placeholder="your-email@example.com">
+          <small class="form-hint">Enter an email address to send a test email to. This is not saved.</small>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="testPostfixBtn">Send Test Email</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Email Templates -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Email Templates</span>
+      <span class="card-subtitle text-muted">Customize HTML email templates for each notification event. Use <code>{% raw %}{{ variable }}{% endraw %}</code> or <code>{% raw %}{{ variable:fallback }}{% endraw %}</code> syntax.</span>
+    </div>
+    <div class="tpl-list">
+      {% for tpl in email_templates %}
+      <div class="tpl-row">
+        <div class="tpl-row-info">
+          <span class="tpl-row-label">{{ tpl.label }}</span>
+          <span class="tpl-row-type tpl-type-{{ 'custom' if tpl.use_custom else 'default' }}">{{ 'Custom' if tpl.use_custom else 'Default' }}</span>
+        </div>
+        <div class="tpl-row-actions">
+          <label class="toggle-switch tpl-use-custom-wrap" title="{{ 'Switch to default' if tpl.use_custom else 'Use custom (save one first)' }}">
+            <input type="checkbox" class="tpl-use-custom-cb" data-event="{{ tpl.event_type }}"
+                   {% if tpl.use_custom %}checked{% endif %}
+                   {% if not tpl.has_custom %}disabled{% endif %}>
+            <span class="toggle-slider"></span>
+          </label>
+          <button class="btn btn-xs btn-ghost tpl-edit-btn"
+                  data-event="{{ tpl.event_type }}" data-label="{{ tpl.label }}">Edit</button>
+          {% if tpl.has_custom %}
+          <button class="btn btn-xs btn-ghost tpl-reset-btn"
+                  data-event="{{ tpl.event_type }}" title="Delete custom template, revert to default">Reset</button>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Notifications -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Notification Events</span>
+      <span class="card-subtitle text-muted">Configure which events trigger email notifications</span>
+    </div>
+    <div class="card-body">
+      <div class="notif-list">
+        {% set notif_items = [
+          ('on_exception_created', 'Exception Created', 'When a user creates an exception for a rule'),
+          ('on_suppression_created', 'Suppression Created', 'When a rule is suppressed'),
+          ('on_rule_created', 'Custom Rule Created', 'When a new custom rule is added'),
+          ('on_wazuh_restart_success', 'Wazuh Restart Successful', 'After a successful manager restart'),
+          ('on_wazuh_restart_failure', 'Wazuh Restart Failed', 'When a restart fails'),
+          ('on_disk_threshold', 'Disk Threshold Alert', 'When disk usage exceeds the threshold'),
+          ('on_case_ignored', 'Alert Case Ignored', 'When an alert case is marked as ignored'),
+          ('on_archives_no_log', 'Archives Log Gap', 'When no entries appear in archives.json within the configured threshold'),
+          ('on_indexer_issue', 'Indexer Health Issue', 'When an indexer is unreachable, unhealthy, or has stale data'),
+          ('on_bulk_ignore', 'Bulk Ignore', 'When multiple alert cases are bulk-ignored'),
+          ('on_bulk_suppress', 'Bulk Suppress', 'When multiple rules are bulk-suppressed'),
+        ] %}
+        {% for key, label, desc in notif_items %}
+        {% set is_on = config.notifications.get(key, True) %}
+        {% set ev_recipient = config.notifications.get('event_recipients', {}).get(key, '') %}
+        <div class="notif-row">
+          <div class="notif-row-main">
+            <div class="notif-info">
+              <div class="notif-label">{{ label }}</div>
+              <div class="notif-desc text-muted text-sm">{{ desc }}</div>
+            </div>
+            {% if key == 'on_disk_threshold' %}
+            <input type="number" class="form-control form-control-sm" id="diskThreshold"
+                   value="{{ config.notifications.disk_threshold_percent }}"
+                   min="1" max="99" style="width:72px" title="Alert when disk usage exceeds this %">
+            {% endif %}
+            <label class="toggle-switch">
+              <input type="checkbox" class="notif-toggle" data-key="{{ key }}"
+                     {% if is_on %}checked{% endif %}>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="notif-recipients-wrap" {% if not is_on %}style="display:none"{% endif %}>
+            <input type="text" class="form-control notif-recipients-input"
+                   data-key="{{ key }}"
+                   placeholder="e.g. user@example.com, team@example.com"
+                   value="{{ ev_recipient }}">
+            <div class="notif-recipients-hint">Comma-separated. Notifications will only be sent if recipients are specified here.</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <hr class="section-divider" style="margin:20px 0">
+      <div class="form-label" style="margin-bottom:8px">Quiet Hours</div>
+      <p class="text-muted text-sm" style="margin-bottom:10px">Suppress stale-data (indexer) and archives log-gap alerts during a daily quiet window. Useful when logs naturally stop or files rotate overnight.</p>
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+        <input type="checkbox" id="quietHoursEnabled" {% if config.notifications.get('quiet_hours_enabled') %}checked{% endif %}>
+        Enable quiet hours
+      </label>
+      <div class="form-row" style="gap:12px;align-items:flex-end">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">From</label>
+          <input type="time" class="form-control" id="quietHoursStart" value="{{ config.notifications.get('quiet_hours_start', '00:00') }}" style="width:120px">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">To</label>
+          <input type="time" class="form-control" id="quietHoursEnd" value="{{ config.notifications.get('quiet_hours_end', '06:00') }}" style="width:120px">
+        </div>
+        <span class="text-muted text-sm" style="padding-bottom:6px">(server local time)</span>
+      </div>
+
+      <button class="btn btn-primary mt-2" id="saveNotifBtn">Save Notification Settings</button>
+
+      <hr class="section-divider" style="margin:20px 0">
+      <div class="form-label" style="margin-bottom:8px">Per-Disk Thresholds</div>
+      <p class="text-muted text-sm" style="margin-bottom:10px">Configure individual disk usage thresholds. When configured, only these mounts are monitored (replacing the global threshold above).</p>
+      <button class="btn btn-secondary btn-sm" id="loadDiskMountsBtn" type="button">Configure Disk Thresholds</button>
+      <div id="diskThresholdsPanel" style="display:none;margin-top:12px">
+        <div id="diskThresholdsList"></div>
+        <button class="btn btn-primary btn-sm mt-2" id="saveDiskThresholdsBtn" type="button">Save Disk Thresholds</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WazuhFields Index Mapping -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Field Index Patterns</span>
+      <span class="card-subtitle text-muted">Update the list of known alert fields used in the exception builder dropdown</span>
+    </div>
+    <div class="card-body">
+      <div class="wazuh-fields-info">
+        <p class="text-sm">The exception builder field dropdown is populated from <code>app/WazuhFields/WazuhFields.json</code> — the output of <code>GET /*/_mapping</code> from your Wazuh Elasticsearch/OpenSearch instance.</p>
+        <p class="text-sm">If you have added new index patterns or fields, run the following in Kibana/OpenSearch Dashboards Dev Tools or via curl:</p>
+        <pre class="fields-cmd-block">GET /*/_mapping</pre>
+        <p class="text-sm">Copy the full JSON response and paste it below. The current file will be backed up as <code>WazuhFields.json.bak</code> before saving.</p>
+      </div>
+      <div class="form-group mt-2">
+        <label class="form-label">Paste GET /*/_mapping output</label>
+        <textarea class="form-control font-mono" id="wazuhFieldsJson" rows="10"
+                  placeholder='{ "wazuh-alerts-4.x-2024.01.01": { "mappings": { ... } } }'></textarea>
+      </div>
+      <button class="btn btn-primary" id="saveWazuhFieldsBtn">Save &amp; Update Fields</button>
+    </div>
+  </div>
+
+  <!-- Health Monitoring -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Health Monitoring</span>
+      <span class="card-subtitle text-muted">Configure how often the health dashboard polls server status</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label">Poll Interval (seconds)</label>
+        <input type="number" class="form-control" id="healthPollInterval"
+               value="{{ config.get('health', {}).get('poll_interval_seconds', 30) }}"
+               min="5" max="3600" style="max-width:160px">
+        <small class="form-hint">How often the health page refreshes service status, disk, memory, CPU, and network data. Minimum: 5 seconds.</small>
+      </div>
+      <button class="btn btn-primary" id="saveHealthBtn">Save Health Settings</button>
+    </div>
+  </div>
+
+  <!-- Indexer Monitoring -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Indexer Monitoring</span>
+      <span class="card-subtitle text-muted">Monitor Wazuh indexer cluster health and/or log data freshness</span>
+    </div>
+    <div class="card-body">
+      <div class="form-label" style="margin-bottom:8px">Monitors</div>
+      <div id="indexerList"></div>
+
+      <button class="btn btn-secondary mt-2" id="addIndexerBtn" type="button">Add Monitor</button>
+
+      <!-- Add/Edit inline form (hidden by default) -->
+      <div id="indexerForm" style="display:none" class="mt-2">
+        <div class="card" style="border:1px solid var(--border-color);padding:16px">
+          <input type="hidden" id="indexerEditIdx" value="-1">
+
+          <!-- Monitor Type -->
+          <div class="form-row">
+            <div class="form-group">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+                <span class="form-label" style="margin-bottom:0">Monitor Type</span>
+                <button type="button" class="idx-help-btn" id="indexerTypeHelpBtn" title="What does this monitor type do?">?</button>
+              </div>
+              <select class="form-control" id="indexerType" style="max-width:260px">
+                <option value="cluster_health">Cluster Health (green/yellow/red)</option>
+                <option value="log_activity">Log Activity (data freshness)</option>
+              </select>
+              <small class="form-hint" id="indexerTypeHint">Monitors cluster status via /_cluster/health.</small>
+              <div id="indexerTypeDetail" style="display:none"></div>
+            </div>
+          </div>
+
+          <!-- Common fields: Name + URL -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Name</label>
+              <input type="text" class="form-control" id="indexerName" placeholder="e.g. Primary Indexer">
+            </div>
+            <div class="form-group">
+              <label class="form-label">URL</label>
+              <input type="text" class="form-control font-mono" id="indexerUrl" placeholder="https://192.168.1.10:9200">
+            </div>
+          </div>
+
+          <!-- Common fields: Username + Password -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Username</label>
+              <input type="text" class="form-control" id="indexerUsername" placeholder="admin">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password</label>
+              <input type="password" class="form-control" id="indexerPassword" placeholder="password">
+            </div>
+          </div>
+
+          <!-- Common: Check Interval -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Check Interval (seconds)</label>
+              <input type="number" class="form-control" id="indexerCheckInterval" value="120" min="30" style="max-width:160px">
+              <small class="form-hint">How often this monitor runs. Minimum: 30 seconds.</small>
+            </div>
+          </div>
+
+          <!-- Cluster Health fields -->
+          <div id="indexerClusterFields">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Alert On</label>
+                <select class="form-control" id="indexerAlertOn" style="max-width:200px">
+                  <option value="red">Red only</option>
+                  <option value="yellow">Yellow + Red</option>
+                  <option value="any">Any non-green</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Log Activity fields -->
+          <div id="indexerLogFields" style="display:none">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Index Pattern</label>
+                <input type="text" class="form-control font-mono" id="indexerIndexPattern" value="wazuh-alerts-*" placeholder="wazuh-alerts-*" style="max-width:300px">
+                <small class="form-hint">Index pattern to query for latest documents (e.g. wazuh-alerts-*, wazuh-archives-*).</small>
+              </div>
+              <div class="form-group">
+                <label class="form-label">No New Data Alert (minutes)</label>
+                <input type="number" class="form-control" id="indexerNoNewDataMin" value="10" min="1" style="max-width:120px">
+                <small class="form-hint">Alert if latest document is older than this many minutes.</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Common: toggles -->
+          <div class="form-row">
+            <div class="form-group" style="display:flex;align-items:center;gap:16px;padding-top:4px">
+              <label><input type="checkbox" id="indexerVerifySsl"> Verify SSL</label>
+              <label><input type="checkbox" id="indexerEnabled" checked> Enabled</label>
+            </div>
+          </div>
+          <div class="btn-row" style="align-items:center">
+            <button class="btn btn-primary" id="indexerFormSaveBtn" type="button">Add to List</button>
+            <button class="btn btn-ghost" id="indexerFormTestBtn" type="button">Test Connection</button><button type="button" class="idx-help-btn" style="margin-left:-8px;margin-right:4px" onclick="document.getElementById('testConnHelp').style.display=document.getElementById('testConnHelp').style.display==='none'?'':'none'" title="What does Test Connection do?">?</button>
+            <button class="btn btn-ghost" id="indexerFormCancelBtn" type="button">Cancel</button>
+          </div>
+          <div id="testConnHelp" class="idx-help-box" style="display:none">
+            Runs the selected monitor's check once using the credentials and URL above, without saving anything.
+            For <strong>Cluster Health</strong>, it sends the cluster health request and shows the status, node count, and shard info.
+            For <strong>Log Activity</strong>, it queries the index pattern for the latest document and shows its timestamp and age.
+            Use this to verify your connection details before saving.
+          </div>
+          <div id="indexerTestResult" class="mt-2" style="display:none"></div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary mt-2" id="saveIndexersBtn">Save Indexer Settings</button>
+    </div>
+  </div>
+
+  <!-- Backup -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Backups</span>
+    </div>
+    <div class="card-body">
+      <div class="toggle-row">
+        <label class="form-label">Enable Scheduled Backups</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="backupEnabled" {% if config.backup.enabled %}checked{% endif %}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Backup Directory</label>
+        <input type="text" class="form-control font-mono" id="backupDir" value="{{ config.backup.backup_dir }}"
+               placeholder="/var/ossec/backup">
+        <small class="form-hint">Must be an absolute path starting with <code>/</code></small>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Schedule</label>
+        {% set _stype = config.backup.schedule_type or 'daily' %}
+        {% set _stype = 'hourly' if _stype == 'interval' else _stype %}
+        <div class="sched-tabs" id="schedTypeTabs" data-current="{{ _stype }}">
+          <button type="button" class="sched-tab" data-type="hourly">Every N Hours</button>
+          <button type="button" class="sched-tab" data-type="daily">Daily</button>
+          <button type="button" class="sched-tab" data-type="every_n_days">Every N Days</button>
+          <button type="button" class="sched-tab" data-type="weekly">Weekly</button>
+        </div>
+      </div>
+      <div class="sched-panel-wrap">
+
+        <!-- Hourly -->
+        <div class="sched-panel" id="schedPanelHourly">
+          <div class="sched-sentence">
+            <span class="sched-label">Run every</span>
+            <input type="number" class="form-control sched-num" id="intervalHours"
+                   min="1" max="168" value="{{ config.backup.interval_hours or 24 }}">
+            <span class="sched-label">hours</span>
+          </div>
+          <p class="sched-hint">1 = every hour &nbsp;&bull;&nbsp; 6 = four times a day &nbsp;&bull;&nbsp; 12 = twice a day</p>
+        </div>
+
+        <!-- Daily -->
+        <div class="sched-panel" id="schedPanelDaily">
+          <div class="sched-sentence">
+            <span class="sched-label">Run every day at</span>
+            <input type="time" class="form-control sched-time" id="scheduleTime"
+                   value="{{ '%02d:%02d' % (config.backup.schedule_hour, config.backup.schedule_minute) }}">
+          </div>
+        </div>
+
+        <!-- Every N days -->
+        <div class="sched-panel" id="schedPanelDays">
+          <div class="sched-sentence">
+            <span class="sched-label">Run every</span>
+            <input type="number" class="form-control sched-num" id="intervalDays"
+                   min="1" max="365" value="{{ config.backup.get('interval_days', 2) }}">
+            <span class="sched-label">days at</span>
+            <input type="time" class="form-control sched-time" id="scheduleTimeDays"
+                   value="{{ '%02d:%02d' % (config.backup.schedule_hour, config.backup.schedule_minute) }}">
+          </div>
+          <p class="sched-hint">2 = every other day &nbsp;&bull;&nbsp; 7 = once a week (same as weekly)</p>
+        </div>
+
+        <!-- Weekly -->
+        <div class="sched-panel" id="schedPanelWeekly">
+          <div class="sched-sentence">
+            <span class="sched-label">On</span>
+            <div class="dow-group">
+              {% set _dow = config.backup.get('schedule_days_of_week', ['mon']) %}
+              {% for day, lbl in [('mon','Mon'),('tue','Tue'),('wed','Wed'),('thu','Thu'),('fri','Fri'),('sat','Sat'),('sun','Sun')] %}
+              <button type="button" class="dow-btn{% if day in _dow %} dow-active{% endif %}" data-day="{{ day }}">{{ lbl }}</button>
+              {% endfor %}
+            </div>
+            <span class="sched-label">at</span>
+            <input type="time" class="form-control sched-time" id="scheduleTimeWeekly"
+                   value="{{ '%02d:%02d' % (config.backup.schedule_hour, config.backup.schedule_minute) }}">
+          </div>
+          <p class="sched-hint">Click days to toggle. At least one day must be selected.</p>
+        </div>
+
+      </div>
+      <div class="form-group">
+        <label class="form-label">Files to Backup (one path per line)</label>
+        <textarea class="form-control font-mono" id="filesToBackup" rows="5">{{ config.backup.files_to_backup | join('\n') }}</textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Keep Last N Backups</label>
+          <input type="number" class="form-control" id="keepLastN" value="{{ config.backup.keep_last_n }}" min="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox" id="compressBackup" {% if config.backup.compress %}checked{% endif %}> Compress (gzip)
+          </label>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="saveBackupBtn">Save Backup Settings</button>
+        <button class="btn btn-secondary" id="triggerBackupBtn">Run Backup Now</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<!-- Template Editor Modal -->
+<div class="modal-overlay" id="tplEditModal">
+  <div class="modal modal-xl modal-resizable" style="width:820px;max-width:95vw">
+    <div class="modal-header">
+      <h3 class="modal-title" id="tplEditModalTitle">Edit Email Template</h3>
+      <button class="modal-close" id="tplEditModalClose">&times;</button>
+    </div>
+    <div class="modal-body" style="padding:0">
+      <!-- Tab bar -->
+      <div class="tpl-modal-tabs">
+        <button class="tpl-modal-tab active" data-tab="custom">Custom Template</button>
+        <button class="tpl-modal-tab" data-tab="default">View Default</button>
+        <button class="tpl-modal-tab" data-tab="preview">Preview</button>
+      </div>
+      <!-- Custom tab -->
+      <div class="tpl-tab-panel" id="tplTabCustom">
+        <div class="tpl-vars-bar" id="tplVarsBar"></div>
+        <textarea class="tpl-editor" id="tplCustomEditor" spellcheck="false" placeholder="Paste your HTML template here. Use &#123;&#123; variable &#125;&#125; for dynamic values."></textarea>
+      </div>
+      <!-- Default tab (read-only) -->
+      <div class="tpl-tab-panel" id="tplTabDefault" style="display:none">
+        <div class="tpl-readonly-note">Default template (read-only). Copy to Custom tab to customise.</div>
+        <textarea class="tpl-editor tpl-editor-readonly" id="tplDefaultViewer" spellcheck="false" readonly></textarea>
+      </div>
+      <!-- Preview tab -->
+      <div class="tpl-tab-panel" id="tplTabPreview" style="display:none">
+        <div class="tpl-readonly-note" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Rendered with sample data — actual values will differ.</span>
+          <button class="btn btn-xs btn-ghost" id="tplRefreshPreviewBtn">Refresh</button>
+        </div>
+        <iframe class="tpl-preview-frame" id="tplPreviewFrame" sandbox="allow-same-origin"></iframe>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="tplCopyDefaultBtn" title="Copy default template into custom editor">Copy Default</button>
+      <div style="flex:1"></div>
+      <label class="checkbox-label" id="tplUseCustomWrap" style="margin-right:10px">
+        <input type="checkbox" id="tplUseCustomCheck"> Use this custom template
+      </label>
+      <button class="btn btn-ghost" id="tplCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="tplSaveBtn">Save Custom Template</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_js %}
+<script>
+window.__INDEXER_HOSTS = {{ config.get('indexers', {}).get('hosts', []) | tojson }};
+window.__DISK_THRESHOLDS = {{ config.get('notifications', {}).get('disk_thresholds', []) | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/settings.js') }}?v=3"></script>
+{% endblock %}

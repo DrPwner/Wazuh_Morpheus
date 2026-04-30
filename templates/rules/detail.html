@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Rule {{ rule.id }} - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rules.css') }}">
+{% endblock %}
+{% block breadcrumb %}
+  <a href="{{ url_for('rules.rules_list') }}" class="breadcrumb-link">Rules</a>
+  <span class="breadcrumb-sep">/</span>
+  <a href="{{ url_for('rules.rules_list', source=source) }}" class="breadcrumb-link">{{ source | capitalize }}</a>
+  <span class="breadcrumb-sep">/</span>
+  <span>Rule {{ rule.id }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">
+      Rule {{ rule.id }}
+      <span class="level-badge level-{{ rule.level }}">Level {{ rule.level }}</span>
+      {% if rule.overwrite %}<span class="badge badge-warning">Overwrite</span>{% endif %}
+      {% if rule.level in ('0', 0) %}<span class="badge badge-muted">Suppressed</span>{% endif %}
+    </h1>
+    <p class="page-subtitle">{{ rule.description or 'No description' }}</p>
+  </div>
+  <div class="page-header-right">
+    <a href="{{ url_for('rules.rules_list', source=source) }}" class="btn btn-ghost">Back to Rules</a>
+  </div>
+</div>
+
+<div class="detail-grid">
+  <!-- Rule info -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Rule Details</span></div>
+    <div class="card-body">
+      <dl class="info-list">
+        <dt>Rule ID</dt>
+        <dd class="font-mono">{{ rule.id }}</dd>
+        <dt>Level</dt>
+        <dd><span class="level-badge level-{{ rule.level }}">{{ rule.level }}</span></dd>
+        <dt>Source</dt>
+        <dd>{{ source | capitalize }}</dd>
+        {% if rule.conditions.if_sid %}
+        <dt>if_sid</dt>
+        <dd class="font-mono">{{ rule.conditions.if_sid.value }}</dd>
+        {% endif %}
+        {% if rule.conditions.if_group %}
+        <dt>if_group</dt>
+        <dd class="font-mono">{{ rule.conditions.if_group.value }}</dd>
+        {% endif %}
+        {% if rule.conditions.if_matched_sid %}
+        <dt>if_matched_sid</dt>
+        <dd class="font-mono">{{ rule.conditions.if_matched_sid.value }}</dd>
+        {% endif %}
+        {% if rule.frequency %}
+        <dt>frequency</dt>
+        <dd>{{ rule.frequency }}</dd>
+        {% endif %}
+        {% if rule.timeframe %}
+        <dt>timeframe</dt>
+        <dd>{{ rule.timeframe }}s</dd>
+        {% endif %}
+        {% if rule.options %}
+        <dt>Options</dt>
+        <dd>
+          {% for opt in rule.options %}
+          <span class="tag">{{ opt }}</span>
+          {% endfor %}
+        </dd>
+        {% endif %}
+        {% if rule.groups %}
+        <dt>Groups</dt>
+        <dd class="font-mono text-sm">{{ rule.groups | join(', ') }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+
+  <!-- Field conditions -->
+  {% if rule.fields %}
+  <div class="card">
+    <div class="card-header"><span class="card-title">Field Conditions</span></div>
+    <div class="card-body p-0">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Field Name</th>
+            <th>Type</th>
+            <th>Negate</th>
+            <th>Pattern / Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for field in rule.fields %}
+          <tr>
+            <td class="font-mono text-sm">{{ field.name }}</td>
+            <td><span class="tag">{{ field.type or 'osmatch' }}</span></td>
+            <td>
+              {% if field.negate %}
+              <span class="badge badge-warning">yes</span>
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="font-mono text-sm rule-field-value">{{ field.value }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- XML Viewer -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Rule XML</span>
+    <button class="btn btn-xs btn-ghost view-xml-btn"
+            data-rule-id="{{ rule.id }}"
+            data-xml="{{ rule.raw_xml | e }}">View in Modal</button>
+  </div>
+  <div class="card-body p-0">
+    <div class="xml-viewer p-3" id="ruleXmlInline"></div>
+  </div>
+</div>
+
+<!-- Action history for this rule -->
+{% if actions %}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Action History</span>
+    <span class="card-subtitle text-muted">Exceptions and suppressions applied to this rule</span>
+  </div>
+  <div class="table-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Field</th>
+          <th>Value</th>
+          <th>Source</th>
+          <th>Created By</th>
+          <th>Date</th>
+          <th>Diff</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for action in actions %}
+        <tr>
+          <td>
+            <span class="tag tag-{{ action.action_type }}">
+              {{ action.action_type | replace('_', ' ') }}
+            </span>
+          </td>
+          <td class="font-mono text-sm">{{ action.field_name or '—' }}</td>
+          <td class="font-mono text-sm">
+            {{ (action.field_value or '')[:60] }}{% if action.field_value and action.field_value | length > 60 %}…{% endif %}
+          </td>
+          <td>{{ action.rule_source }}</td>
+          <td>{{ action.author or '—' }}</td>
+          <td class="text-sm text-muted">{{ action.created_at[:16] }}</td>
+          <td>
+            {% if action.diff_after %}
+            <button class="btn btn-xs btn-ghost diff-btn"
+                    data-diff="{{ action.diff_after | e }}">Diff</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- XML Viewer Modal -->
+<div class="modal-overlay" id="xmlModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title" id="xmlModalTitle">Rule {{ rule.id }} XML</h3>
+      <button class="modal-close" id="xmlModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="xmlContent" class="xml-viewer"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Diff Viewer Modal -->
+<div class="modal-overlay" id="diffModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">Change Diff</h3>
+      <button class="modal-close" id="diffModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="diffContent" class="diff-viewer"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var raw = {{ rule.raw_xml | tojson }};
+  var el  = document.getElementById('ruleXmlInline');
+  if (el && typeof highlightXml === 'function' && typeof escapeHtml === 'function') {
+    el.innerHTML = highlightXml(escapeHtml(raw));
+  } else if (el) {
+    el.textContent = raw;
+  }
+})();
+</script>
+{% endblock %}
+
+{% block page_js %}
+<script src="{{ url_for('static', filename='js/xml-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/diff-viewer.js') }}"></script>
+{% endblock %}

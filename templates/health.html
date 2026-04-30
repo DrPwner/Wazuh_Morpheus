@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Health - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/health.css') }}">
+{% endblock %}
+{% block breadcrumb %}<span>Health</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">System Health</h1>
+    <p class="page-subtitle">Real-time monitoring of the Wazuh manager and server resources</p>
+  </div>
+  <div class="page-header-right">
+    <button class="btn btn-ghost" id="refreshBtn">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      Refresh
+    </button>
+    <button class="btn btn-danger" id="restartBtn">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>
+      Restart Wazuh
+    </button>
+  </div>
+</div>
+
+<!-- Status cards -->
+<div class="health-grid">
+  <div class="health-card" id="serviceCard">
+    <div class="health-card-header">
+      <span class="health-card-title">Wazuh Manager</span>
+      <span class="status-indicator" id="serviceIndicator">
+        <span class="loading-dot"></span>
+      </span>
+    </div>
+    <div class="health-card-value" id="serviceState">Loading...</div>
+    <div class="health-card-detail text-muted text-sm" id="serviceDetail"></div>
+  </div>
+
+  <div class="health-card" id="cpuCard">
+    <div class="health-card-header">
+      <span class="health-card-title">CPU Usage</span>
+      <span class="health-pct" id="cpuPct">-</span>
+    </div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="cpuBar" style="width:0%"></div>
+    </div>
+    <div class="health-stats" id="cpuStats" style="margin-top:6px">
+      <div class="health-stat">
+        <div class="stat-num" id="load1">-</div>
+        <div class="stat-lbl">1 min</div>
+      </div>
+      <div class="health-stat">
+        <div class="stat-num" id="load5">-</div>
+        <div class="stat-lbl">5 min</div>
+      </div>
+      <div class="health-stat">
+        <div class="stat-num" id="load15">-</div>
+        <div class="stat-lbl">15 min</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="health-card" id="memCard">
+    <div class="health-card-header">
+      <span class="health-card-title">Memory</span>
+      <span class="health-pct" id="memPct">-</span>
+    </div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="memBar" style="width:0%"></div>
+    </div>
+    <div class="health-card-detail text-muted text-sm" id="memDetail"></div>
+  </div>
+</div>
+
+<!-- Service details -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Service Details</span>
+    <span class="card-subtitle text-muted">systemctl status wazuh-manager.service</span>
+  </div>
+  <pre class="service-output" id="serviceOutput">Loading...</pre>
+</div>
+
+<!-- CPU Usage Graph -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">CPU Usage History</span>
+    <span class="card-subtitle text-muted">Last 5 hours</span>
+  </div>
+  <div class="card-body" style="padding:12px">
+    <canvas id="cpuChart" height="180" style="width:100%;display:block"></canvas>
+  </div>
+</div>
+
+<!-- Indexer Health -->
+<div class="card" id="indexerSection" style="display:none">
+  <div class="card-header">
+    <span class="card-title">Indexer Health</span>
+  </div>
+  <div class="card-body">
+    <div id="indexerHealthContent">
+      <div class="loading-placeholder">Loading indexer status...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Disk usage -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Disk Usage</span>
+  </div>
+  <div class="card-body" id="diskContent">
+    <div class="loading-placeholder">Loading disk information...</div>
+  </div>
+</div>
+
+<!-- Network -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Network Interfaces</span>
+  </div>
+  <div class="table-wrapper" id="networkContent">
+    <div class="loading-placeholder p-4">Loading network information...</div>
+  </div>
+</div>
+
+<!-- Restart history -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Restart History</span>
+  </div>
+  <div class="table-wrapper">
+    <table class="data-table" id="restartTable">
+      <thead>
+        <tr><th>Date</th><th>Triggered By</th><th>Reason</th><th>Status</th><th>Details</th></tr>
+      </thead>
+      <tbody id="restartBody">
+        <tr><td colspan="5" class="text-muted text-center p-3">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Restart Modal -->
+<div class="modal-overlay" id="restartModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">Restart Wazuh Manager</h3>
+      <button class="modal-close" id="restartModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning">
+        Restarting the Wazuh manager will temporarily interrupt alert collection.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reason <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" id="restartReason"
+               placeholder="e.g. Applied new exception rules" required>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="restartCancelBtn">Cancel</button>
+      <button class="btn btn-danger" id="restartConfirmBtn">Restart Now</button>
+    </div>
+  </div>
+</div>
+
+<!-- Restart status modal -->
+<div class="modal-overlay" id="restartStatusModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">Restart Status</h3>
+      <button class="modal-close" id="restartStatusClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="restartStatusContent">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Restarting Wazuh manager...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block page_js %}
+<script>window.HEALTH_POLL_INTERVAL = {{ poll_interval_ms }};</script>
+<script src="{{ url_for('static', filename='js/health.js') }}"></script>
+{% endblock %}

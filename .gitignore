@@ -1,0 +1,56 @@
+# Configuration (contains secrets, credentials, local paths)
+config.json
+
+# JSON data files
+*.json
+# Keep package/project JSON files that are part of the repo
+!package.json
+!package-lock.json
+# WazuhFields.json is user-specific index mapping data
+# app/WazuhFields/WazuhFields.json
+
+# Archives and compressed files
+*.7z
+*.zip
+*.tar.gz
+*.tar
+*.gz
+*.rar
+*.db
+# Text files
+*.txt
+# Keep requirements.txt
+!requirements.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+venv/
+.venv/
+env/
+
+# SQLite database
+*.db
+*.db-wal
+*.db-shm
+data/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backup files
+*.bak

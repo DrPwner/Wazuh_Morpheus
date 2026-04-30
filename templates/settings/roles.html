@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Roles - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+{% endblock %}
+{% block breadcrumb %}
+  <a href="{{ url_for('settings.general') }}" class="breadcrumb-link">Settings</a>
+  <span class="breadcrumb-sep">/</span>
+  <span>Roles</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Roles & Permissions</h1>
+  <button class="btn btn-primary" id="createRoleBtn">New Role</button>
+</div>
+
+<div class="roles-grid">
+  {% for role in roles %}
+  <div class="card role-card" data-role-id="{{ role.id }}">
+    <div class="card-header">
+      <span class="card-title">{{ role.name }}</span>
+      <div class="card-actions">
+        <button class="btn btn-xs btn-ghost edit-role-perms-btn" data-role-id="{{ role.id }}" data-role-name="{{ role.name }}">
+          Edit Permissions
+        </button>
+        <button class="btn btn-xs btn-danger-ghost delete-role-btn" data-role-id="{{ role.id }}">
+          Delete
+        </button>
+      </div>
+    </div>
+    <div class="card-body">
+      <p class="text-muted text-sm">{{ role.description or 'No description' }}</p>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card mt-4">
+  <div class="card-header">
+    <span class="card-title">All Permissions</span>
+  </div>
+  <div class="table-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr><th>Category</th><th>Permission</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        {% set current_cat = namespace(value='') %}
+        {% for perm in all_permissions %}
+        {% if perm.category != current_cat.value %}
+        {% set current_cat.value = perm.category %}
+        <tr class="category-row">
+          <td colspan="3"><strong>{{ perm.category }}</strong></td>
+        </tr>
+        {% endif %}
+        <tr>
+          <td></td>
+          <td class="font-mono text-sm">{{ perm.name }}</td>
+          <td class="text-muted text-sm">{{ perm.description }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Create Role Modal -->
+<div class="modal-overlay" id="createRoleModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Create Role</h3>
+      <button class="modal-close" id="createRoleClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Role Name *</label>
+        <input type="text" class="form-control" id="newRoleName">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <input type="text" class="form-control" id="newRoleDesc">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="createRoleCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="createRoleSubmitBtn">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Role Permissions Modal -->
+<div class="modal-overlay" id="editRoleModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">Permissions for: <span id="editRoleName"></span></h3>
+      <button class="modal-close" id="editRoleClose">&times;</button>
+    </div>
+    <div class="modal-body" id="editRolePermsContent">
+      <div class="loading-placeholder">Loading...</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="editRoleCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="editRoleSubmitBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Permission data for JS -->
+<script>
+window.ALL_PERMISSIONS = {{ all_permissions | rows_to_dicts | tojson }};
+</script>
+{% endblock %}
+
+{% block page_js %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

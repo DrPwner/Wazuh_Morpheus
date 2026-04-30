@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+{% block title %}Rules - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rules.css') }}">
+{% endblock %}
+{% block breadcrumb %}<span>Rules</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">Rules</h1>
+  </div>
+  <div class="page-header-right">
+    <a href="{{ url_for('rules.create_rule') }}" class="btn btn-primary">New Custom Rule</a>
+  </div>
+</div>
+
+<!-- Source tabs -->
+<div class="tab-bar">
+  <a href="{{ url_for('rules.rules_list', source='all', q=search) }}" class="tab {% if source == 'all' %}active{% endif %}">All Rules</a>
+  <a href="{{ url_for('rules.rules_list', source='exceptions', q=search) }}" class="tab {% if source == 'exceptions' %}active{% endif %}">Exceptions File</a>
+  <a href="{{ url_for('rules.rules_list', source='suppressions', q=search) }}" class="tab {% if source == 'suppressions' %}active{% endif %}">Suppressions File</a>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+  {{ error }}
+</div>
+{% endif %}
+
+<div class="filter-bar">
+  <form method="GET" class="filter-form">
+    <input type="hidden" name="source" value="{{ source }}">
+    <input type="text" name="q" class="form-control" placeholder="Search by rule ID or description..." value="{{ search }}">
+    <button type="submit" class="btn btn-secondary">Search</button>
+    {% if search %}<a href="{{ url_for('rules.rules_list', source=source) }}" class="btn btn-ghost">Clear</a>{% endif %}
+  </form>
+</div>
+
+<!-- Bulk action toolbar (visible when rows are selected) -->
+<div class="bulk-toolbar" id="bulkToolbar" style="display:none">
+  <span id="bulkSelectedCount" class="text-sm text-muted">0 selected</span>
+  <button class="btn btn-sm btn-danger" id="bulkSuppressBtn">Suppress Selected</button>
+  <button class="btn btn-sm btn-ghost" id="bulkCancelBtn">Cancel</button>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">{{ total }} rule{% if total != 1 %}s{% endif %}</span>
+  </div>
+  <div class="table-wrapper">
+    <table class="data-table" id="rulesTable">
+      <thead>
+        <tr>
+          {% if source == 'all' %}
+          <th style="width:36px">
+            <input type="checkbox" id="selectAllRules" title="Select all">
+          </th>
+          {% endif %}
+          <th style="width:80px">
+            {% set nd = 'desc' if sort_by == 'id' and sort_dir == 'asc' else 'asc' %}
+            <a href="?source={{ source }}&q={{ search }}&sort_by=id&sort_dir={{ nd }}" class="col-sort{% if sort_by == 'id' %} col-sort-active{% endif %}">
+              ID{% if sort_by == 'id' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th style="width:60px">
+            {% set nd = 'desc' if sort_by == 'level' and sort_dir == 'asc' else 'asc' %}
+            <a href="?source={{ source }}&q={{ search }}&sort_by=level&sort_dir={{ nd }}" class="col-sort{% if sort_by == 'level' %} col-sort-active{% endif %}">
+              Level{% if sort_by == 'level' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th>
+            {% set nd = 'desc' if sort_by == 'description' and sort_dir == 'asc' else 'asc' %}
+            <a href="?source={{ source }}&q={{ search }}&sort_by=description&sort_dir={{ nd }}" class="col-sort{% if sort_by == 'description' %} col-sort-active{% endif %}">
+              Description{% if sort_by == 'description' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          <th style="width:120px">Status</th>
+          {% if source == 'all' %}
+          <th style="width:80px">
+            {% set nd = 'desc' if sort_by == 'source' and sort_dir == 'asc' else 'asc' %}
+            <a href="?source={{ source }}&q={{ search }}&sort_by=source&sort_dir={{ nd }}" class="col-sort{% if sort_by == 'source' %} col-sort-active{% endif %}">
+              Source{% if sort_by == 'source' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
+            </a>
+          </th>
+          {% endif %}
+          <th style="width:160px">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rule in rules %}
+        {% set actual_source = rule.rule_source if rule.rule_source is defined else source %}
+        <tr class="rule-row {% if rule.level in ('0', 0) %}rule-suppressed{% endif %}"
+            data-rule-id="{{ rule.id }}" data-rule-source="{{ actual_source }}">
+          {% if source == 'all' %}
+          <td>
+            <input type="checkbox" class="rule-select-cb" data-rule-id="{{ rule.id }}" data-rule-source="{{ actual_source }}">
+          </td>
+          {% endif %}
+          <td class="font-mono">{{ rule.id }}</td>
+          <td>
+            {% if rule.level in ('0', 0) %}
+            <span class="level-badge level-0">0</span>
+            {% else %}
+            <span class="level-badge level-{{ rule.level }}">{{ rule.level }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="rule-desc">{{ rule.description or 'No description' }}</div>
+          </td>
+          <td>
+            {% if rule.id in suppressed_ids %}
+            <span class="status-badge status-suppressed">Suppressed</span>
+            {% endif %}
+            {% if rule.id in exception_ids %}
+            <span class="status-badge status-excepted">Has Exception</span>
+            {% endif %}
+          </td>
+          {% if source == 'all' %}
+          <td>
+            <span class="source-badge source-{{ actual_source }}">{{ actual_source|capitalize }}</span>
+          </td>
+          {% endif %}
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-ghost view-xml-btn"
+                    data-rule-id="{{ rule.id }}" data-source="{{ actual_source }}"
+                    title="View XML">
+              XML
+            </button>
+            <button class="btn btn-xs btn-ghost rule-exception-btn"
+                    data-rule-id="{{ rule.id }}" data-source="{{ actual_source }}" title="Create exception for this rule">
+              Exception
+            </button>
+            <button class="btn btn-xs btn-ghost rule-suppress-btn"
+                    data-rule-id="{{ rule.id }}" title="Suppress this rule">
+              Suppress
+            </button>
+            {% if actual_source == 'custom' and (session.get('is_root') or 'delete_custom_rules' in session.get('permissions', [])) %}
+            <button class="btn btn-xs btn-ghost rule-delete-btn"
+                    data-rule-id="{{ rule.id }}" data-source="{{ actual_source }}"
+                    data-description="{{ rule.description | e }}"
+                    title="Delete this rule">
+              Delete
+            </button>
+            {% elif actual_source == 'exceptions' and (session.get('is_root') or 'delete_exceptions' in session.get('permissions', [])) %}
+            <button class="btn btn-xs btn-ghost rule-delete-btn"
+                    data-rule-id="{{ rule.id }}" data-source="{{ actual_source }}"
+                    data-description="{{ rule.description | e }}"
+                    title="Delete this rule">
+              Delete
+            </button>
+            {% elif actual_source == 'suppressions' and (session.get('is_root') or 'delete_suppressions' in session.get('permissions', [])) %}
+            <button class="btn btn-xs btn-ghost rule-delete-btn"
+                    data-rule-id="{{ rule.id }}" data-source="{{ actual_source }}"
+                    data-description="{{ rule.description | e }}"
+                    title="Delete this rule">
+              Delete
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="{{ '7' if source == 'all' else '5' }}" class="empty-state">
+            <div class="empty-content">
+              <p>No rules found</p>
+              {% if search %}<p class="text-muted">No rules match "{{ search }}"</p>{% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if per_page and total > per_page %}
+  <div class="pagination">
+    {% if page > 1 %}
+    <a href="?source={{ source }}&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&page={{ page - 1 }}" class="btn btn-sm btn-ghost">Previous</a>
+    {% endif %}
+    <span class="page-info">Page {{ page }} of {{ total_pages }} ({{ total }} rules)</span>
+    {% if has_next %}
+    <a href="?source={{ source }}&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&page={{ page + 1 }}" class="btn btn-sm btn-ghost">Next</a>
+    {% endif %}
+    <a href="?source={{ source }}&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&all=1" class="btn btn-sm btn-ghost">View All</a>
+  </div>
+  {% elif not per_page and total > 100 %}
+  <div class="pagination">
+    <span class="page-info">Showing all {{ total }} rules</span>
+    <a href="?source={{ source }}&q={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&page=1" class="btn btn-sm btn-ghost">Paginate</a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- XML Viewer Modal -->
+<div class="modal-overlay" id="xmlModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title" id="xmlModalTitle">Rule XML</h3>
+      <button class="modal-close" id="xmlModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="xmlContent" class="xml-viewer"></div>
+      <textarea id="xmlEditArea" style="display:none" spellcheck="false"></textarea>
+    </div>
+    <div class="modal-footer" id="xmlModalFooter">
+      <button class="btn btn-ghost" id="xmlEditRawBtn" style="display:none">Edit Raw</button>
+      <div id="xmlEditActions" style="display:none;gap:6px">
+        <button class="btn btn-ghost" id="xmlCancelEditBtn">Cancel</button>
+        <button class="btn btn-primary" id="xmlSaveRawBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Diff Modal (for edit raw result) -->
+<div class="modal-overlay" id="diffModal">
+  <div class="modal modal-lg modal-resizable">
+    <div class="modal-header">
+      <h3 class="modal-title">Change Diff</h3>
+      <button class="modal-close" id="diffModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="diffContent" class="diff-viewer"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="diffModalOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Exception Modal -->
+<div class="modal-overlay" id="ruleExceptionModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">Create Exception</h3>
+      <button class="modal-close" id="ruleExModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Rule ID</label>
+        <input type="text" class="form-control font-mono" id="ruleExRuleId" readonly style="max-width:160px">
+      </div>
+      <hr class="rex-divider">
+      <div id="ruleExFieldGroups"></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="ruleExAddFieldBtn">+ Add Another Field</button>
+      <div class="form-group" style="margin-top:14px">
+        <label class="form-label">Notes <span class="text-danger">*</span></label>
+        <textarea class="form-control" id="ruleExNotes" rows="2" placeholder="Reason for this exception..." required></textarea>
+      </div>
+      <hr class="rex-divider" style="margin-top:16px">
+      <div class="form-group">
+        <label class="form-label">Rule XML Preview <span class="text-muted" style="font-weight:400;font-size:11px">(updates live as you add values)</span></label>
+        <div id="ruleExXmlPreview" class="xml-viewer" style="max-height:260px;overflow-y:auto;font-size:12px;padding:10px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:var(--radius)"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="ruleExCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="ruleExSubmitBtn">Apply Exception</button>
+    </div>
+  </div>
+</div>
+
+<!-- Suppress Modal -->
+<div class="modal-overlay" id="ruleSuppressModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">Suppress Rule</h3>
+      <button class="modal-close" id="ruleSupModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning mb-2">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        Suppression sets level to 0 and adds noalert="1". This silences ALL alerts from rule <strong id="ruleSupRuleId"></strong>.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes <span class="text-danger">*</span></label>
+        <textarea class="form-control" id="ruleSupNotes" rows="2" placeholder="Reason for suppressing..." required></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="ruleSupCancelBtn">Cancel</button>
+      <button class="btn btn-danger" id="ruleSupSubmitBtn">Apply Suppression</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Suppress Modal -->
+<div class="modal-overlay" id="bulkSuppressModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">Bulk Suppress Rules</h3>
+      <button class="modal-close" id="bulkSupModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning mb-2">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        This will suppress <strong id="bulkSupCount">0</strong> rule(s). This action cannot be undone easily.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes <span class="text-danger">*</span></label>
+        <textarea class="form-control" id="bulkSupNotes" rows="2" placeholder="Reason for suppressing..." required></textarea>
+      </div>
+      <div class="form-group mt-2">
+        <label class="form-label">Type to confirm: <span class="font-mono" id="bulkSupConfirmPhrase" style="font-size:12px;color:var(--text-secondary)"></span></label>
+        <input type="text" class="form-control" id="bulkSupConfirmInput" placeholder="Type the phrase above to confirm...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="bulkSupCancelBtn">Cancel</button>
+      <button class="btn btn-danger" id="bulkSupSubmitBtn" disabled>Suppress Selected</button>
+    </div>
+  </div>
+</div>
+<!-- Delete Rule Modal -->
+<div class="modal-overlay" id="deleteRuleModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">Delete Rule</h3>
+      <button class="modal-close" id="deleteRuleModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-danger mb-2">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        This will permanently delete rule <strong id="deleteRuleId"></strong> from the file.
+      </div>
+      <p class="text-muted text-sm mb-2" id="deleteRuleDesc"></p>
+      <div class="form-group">
+        <label class="form-label">Notes <span class="text-danger">*</span></label>
+        <textarea class="form-control" id="deleteRuleNotes" rows="2" placeholder="Reason for deleting..." required></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="deleteRuleCancelBtn">Cancel</button>
+      <button class="btn btn-danger" id="deleteRuleConfirmBtn">Delete Rule</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_js %}
+<script src="{{ url_for('static', filename='js/xml-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/diff-viewer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/rules.js') }}"></script>
+{% endblock %}

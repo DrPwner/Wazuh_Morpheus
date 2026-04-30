@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}Users - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+{% endblock %}
+{% block breadcrumb %}
+  <a href="{{ url_for('settings.general') }}" class="breadcrumb-link">Settings</a>
+  <span class="breadcrumb-sep">/</span>
+  <span>Users</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">User Management</h1>
+  <button class="btn btn-primary" id="createUserBtn">New User</button>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Full Name</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Last Login</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+        {% set user_role = user_roles.get(user.id) %}
+        <tr>
+          <td>
+            <strong>{{ user.username }}</strong>
+            {% if user.is_root %}<span class="badge badge-primary ml-1">Root</span>{% endif %}
+          </td>
+          <td>{{ user.full_name or '-' }}</td>
+          <td>{{ user.email or '-' }}</td>
+          <td>
+            {% if user_role %}
+            <span class="badge badge-success">{{ user_role.name }}</span>
+            {% else %}
+            <span class="text-muted text-sm">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if user.is_active %}
+            <span class="status-badge status-active">Active</span>
+            {% else %}
+            <span class="status-badge status-inactive">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="text-sm text-muted">{{ user.last_login[:16] if user.last_login else 'Never' }}</td>
+          <td>
+            <button class="btn btn-xs btn-ghost edit-user-btn"
+                    data-user-id="{{ user.id }}"
+                    data-username="{{ user.username }}"
+                    data-email="{{ user.email or '' }}"
+                    data-fullname="{{ user.full_name or '' }}"
+                    data-active="{{ user.is_active }}"
+                    data-root="{{ user.is_root }}">
+              Edit
+            </button>
+            <button class="btn btn-xs btn-ghost assign-role-btn"
+                    data-user-id="{{ user.id }}"
+                    data-username="{{ user.username }}"
+                    data-role-id="{{ user_role.id if user_role else '' }}"
+                    data-role-name="{{ user_role.name if user_role else '' }}">
+              Role
+            </button>
+            <button class="btn btn-xs btn-ghost perms-btn"
+                    {% if user_role %}disabled title="Unassign role first to set custom permissions"{% endif %}
+                    data-user-id="{{ user.id }}"
+                    data-username="{{ user.username }}"
+                    data-has-role="{{ 'true' if user_role else 'false' }}">
+              Permissions
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Create User Modal -->
+<div class="modal-overlay" id="createUserModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Create User</h3>
+      <button class="modal-close" id="createUserClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Username *</label>
+        <input type="text" class="form-control" id="newUsername" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password * <span class="text-muted text-xs">(min. 6 characters)</span></label>
+        <input type="password" class="form-control" id="newPassword" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input type="text" class="form-control" id="newFullName" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-control" id="newEmail" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="newIsRoot"> Root user (all permissions)
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="createUserCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="createUserSubmitBtn">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal-overlay" id="editUserModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit User: <span id="editUserNameDisplay"></span></h3>
+      <button class="modal-close" id="editUserClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editUserId">
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input type="text" class="form-control" id="editFullName" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-control" id="editEmail" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">New Password <span class="text-muted text-xs">(leave blank to keep current)</span></label>
+        <input type="password" class="form-control" id="editPassword" placeholder="(unchanged)" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="editIsActive"> Active
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="editUserCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="editUserSubmitBtn">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Assign Role Modal -->
+<div class="modal-overlay" id="assignRoleModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">Assign Role: <span id="assignRoleUserName"></span></h3>
+      <button class="modal-close" id="assignRoleClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="assignRoleUserId">
+      <div class="form-group">
+        <label class="form-label">Role</label>
+        <select class="form-control" id="assignRoleSelect">
+          <option value="">— No Role (custom permissions) —</option>
+          {% for role in all_roles %}
+          <option value="{{ role.id }}">{{ role.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <p class="text-muted text-xs mt-2">
+        Assigning a role applies that role's permissions and clears any custom per-user overrides.
+        Select "No Role" to use custom permissions instead.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="assignRoleCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="assignRoleSubmitBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Permissions Modal -->
+<div class="modal-overlay" id="permsModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">Permissions: <span id="permsUserName"></span></h3>
+      <button class="modal-close" id="permsClose">&times;</button>
+    </div>
+    <div class="modal-body" id="permsContent">
+      <div class="loading-placeholder">Loading...</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="permsCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="permsSubmitBtn">Save Permissions</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block page_js %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

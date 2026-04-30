@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Audit Log - Wazuh Morpheus{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+{% endblock %}
+{% block breadcrumb %}
+  <a href="{{ url_for('settings.general') }}" class="breadcrumb-link">Settings</a>
+  <span class="breadcrumb-sep">/</span>
+  <span>Audit Log</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Audit Log</h1>
+  <p class="page-subtitle">Every action performed by users is logged here</p>
+</div>
+
+<div class="filter-bar">
+  <form method="GET" class="filter-form">
+    <input type="text" name="q" class="form-control" placeholder="Search..." value="{{ search }}">
+    <select name="category" class="form-control">
+      <option value="">All Categories</option>
+      {% for cat in categories %}
+      <option value="{{ cat }}" {% if cat == category %}selected{% endif %}>{{ cat }}</option>
+      {% endfor %}
+    </select>
+    <select name="user" class="form-control">
+      <option value="">All Users</option>
+      {% for u in users %}
+      <option value="{{ u }}" {% if u == user_filter %}selected{% endif %}>{{ u }}</option>
+      {% endfor %}
+    </select>
+    <input type="date" name="date_from" class="form-control" value="{{ date_from }}" title="From date">
+    <input type="date" name="date_to" class="form-control" value="{{ date_to }}" title="To date">
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    {% if search or category or user_filter or date_from or date_to %}
+    <a href="{{ url_for('settings.audit_log') }}" class="btn btn-ghost">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+    <span class="card-title">{{ total }} entries</span>
+    <a href="{{ url_for('settings.audit_export', q=search, category=category, user=user_filter, date_from=date_from, date_to=date_to) }}"
+       class="btn btn-sm btn-ghost">Export CSV</a>
+  </div>
+  <div class="table-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>User</th>
+          <th>Action</th>
+          <th>Category</th>
+          <th>IP</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+        <tr>
+          <td class="font-mono text-sm">{{ entry.timestamp }}</td>
+          <td>{{ entry.username or 'System' }}</td>
+          <td><span class="action-badge">{{ entry.action }}</span></td>
+          <td><span class="tag">{{ entry.category or '-' }}</span></td>
+          <td class="font-mono text-sm text-muted">{{ entry.ip_address or '-' }}</td>
+          <td class="text-sm">
+            {% if entry.details %}
+            <button class="btn btn-xs btn-ghost details-btn" data-details="{{ entry.details | e }}">
+              Details
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="empty-state">
+            <p>No audit entries found</p>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if total > per_page %}
+  <div class="pagination">
+    {% if page > 1 %}
+    <a href="?q={{ search }}&category={{ category }}&user={{ user_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page - 1 }}"
+       class="btn btn-sm btn-ghost">Previous</a>
+    {% endif %}
+    <span class="page-info">Page {{ page }} of {{ ((total - 1) // per_page) + 1 }}</span>
+    {% if has_next %}
+    <a href="?q={{ search }}&category={{ category }}&user={{ user_filter }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ page + 1 }}"
+       class="btn btn-sm btn-ghost">Next</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- Details Modal -->
+<div class="modal-overlay" id="detailsModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Entry Details</h3>
+      <button class="modal-close" id="detailsClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <pre class="details-json" id="detailsContent"></pre>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // Details button click handler
+  document.querySelectorAll('.details-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var raw = this.dataset.details || '';
+      var formatted = raw;
+      try {
+        formatted = JSON.stringify(JSON.parse(raw), null, 2);
+      } catch (e) {}
+      document.getElementById('detailsContent').textContent = formatted;
+      openModal('detailsModal');
+    });
+  });
+
+  var detailsClose = document.getElementById('detailsClose');
+  if (detailsClose) {
+    detailsClose.addEventListener('click', function () { closeModal('detailsModal'); });
+  }
+
+  var detailsModal = document.getElementById('detailsModal');
+  if (detailsModal) {
+    detailsModal.addEventListener('click', function (e) {
+      if (e.target === detailsModal) closeModal('detailsModal');
+    });
+  }
+});
+</script>
+{% endblock %}
