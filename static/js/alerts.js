@@ -832,15 +832,7 @@ document.addEventListener('DOMContentLoaded', function () {
         wrap.style.display = '';
       }
 
-      // Collapsible toggle handlers for common/similar sections
-      ['listExCommonToggle', 'listExSimilarToggle'].forEach(function (id) {
-        var toggle = document.getElementById(id);
-        if (toggle) {
-          toggle.addEventListener('click', function () {
-            this.classList.toggle('collapsed');
-          });
-        }
-      });
+      // (collapsible toggle handlers registered once outside _openListExModal)
 
       // Use fields from this specific alert's events when available.
       // Store result in _listExFieldsCache so the "Add Another Field" button
@@ -896,6 +888,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('listExModalClose').addEventListener('click', function () { closeModal('listExModal'); });
     document.getElementById('listExCancelBtn').addEventListener('click', function () { closeModal('listExModal'); });
+
+    // Collapsible toggle handlers — registered once (not per modal open)
+    ['listExCommonToggle', 'listExSimilarToggle'].forEach(function (id) {
+      var toggle = document.getElementById(id);
+      if (toggle) {
+        toggle.addEventListener('click', function () {
+          this.classList.toggle('collapsed');
+        });
+      }
+    });
     // No backdrop-click close on exception modal
 
     var diffModal = document.getElementById('listExDiffModal');
