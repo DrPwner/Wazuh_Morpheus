@@ -71,25 +71,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ============================================================
 
   // Refresh alerts button — re-imports from alerts.json
-  var refreshAlertsBtn = document.getElementById('refreshAlertsBtn');
-  if (refreshAlertsBtn) {
-    refreshAlertsBtn.addEventListener('click', async function () {
-      setLoading(refreshAlertsBtn, true);
-      try {
-        var res = await apiPost('/alerts/api/import', {});
-        var msg = res.inserted + ' new alert(s) imported';
-        if (res.skip_dedup) msg += ', ' + res.skip_dedup + ' duplicate(s) skipped';
-        showToast(msg, res.inserted ? 'success' : 'info');
-        if (res.inserted) {
-          setTimeout(function () { location.reload(); }, 800);
-        }
-      } catch (e) {
-        showToast(e.message, 'error');
-      } finally {
-        setLoading(refreshAlertsBtn, false);
-      }
-    });
-  }
+  // Refresh button — wired after _pollCases is defined (inside casesTable block below)
 
   // Ignore case buttons
   let currentIgnoreCaseId = null;
@@ -314,6 +296,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (_pollPage === 1) {
       setInterval(_pollCases, 10000);
+    }
+
+    var refreshAlertsBtn = document.getElementById('refreshAlertsBtn');
+    if (refreshAlertsBtn) {
+      refreshAlertsBtn.addEventListener('click', function () {
+        setLoading(refreshAlertsBtn, true);
+        _pollCases();
+        setTimeout(function () { setLoading(refreshAlertsBtn, false); }, 500);
+      });
     }
 
     function _pollCases() {
