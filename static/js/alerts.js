@@ -361,11 +361,20 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
+    // Whether the customer column is rendered on this page
+    var _hasCustomerCol = !!document.querySelector('thead th') &&
+      Array.prototype.some.call(document.querySelectorAll('thead th'), function (th) {
+        return th.textContent.trim() === 'Customer';
+      });
+
     function _updateCaseRow(row, c) {
+      // Count (via class — position-independent)
       var countBadge = row.querySelector('.count-badge');
       if (countBadge) countBadge.textContent = c.total_count;
-      var cells = row.querySelectorAll('td');
-      if (cells[6]) cells[6].textContent = (c.last_seen || '').slice(0, 16);
+      // Last seen (second .text-muted cell)
+      var mutedCells = row.querySelectorAll('td.text-muted');
+      if (mutedCells.length >= 2) mutedCells[1].textContent = (c.last_seen || '').slice(0, 16);
+      // Status
       var statusBadge = row.querySelector('.status-badge');
       if (statusBadge) {
         statusBadge.textContent = c.status;
@@ -380,22 +389,38 @@ document.addEventListener('DOMContentLoaded', function () {
       var fs   = escapeHtml((c.first_seen || '').slice(0, 16));
       var ls   = escapeHtml((c.last_seen  || '').slice(0, 16));
       var st   = escapeHtml(c.status || '');
+      var cb   = c.status === 'open'
+        ? '<input type="checkbox" class="case-select-cb" data-case-id="' + c.id + '">'
+        : '';
+      var custTd = '';
+      if (_hasCustomerCol) {
+        custTd = '<td class="text-sm">' + escapeHtml(c.customer || '-') + '</td>';
+      }
       var openBtns = '';
       if (c.status === 'open') {
         openBtns =
           '<button class="btn btn-xs btn-ghost case-exception-btn" data-rule-id="' + rid + '" data-case-id="' + c.id + '" title="Create exception">Exception</button>' +
           '<button class="btn btn-xs btn-ghost ignore-btn" data-case-id="' + c.id + '">Ignore</button>';
       }
+      var noteHtml = '';
+      if (c.note_count) {
+        noteHtml = '<button class="btn btn-xs btn-ghost note-icon-btn has-notes" data-case-id="' + c.id + '" title="' + c.note_count + ' note(s)">' +
+          '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px">' +
+          '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>' +
+          '</svg><span class="note-count-badge">' + c.note_count + '</span></button>';
+      }
       return '<tr class="case-row" data-case-id="' + c.id + '" data-status="' + st + '">' +
+        '<td>' + cb + '</td>' +
         '<td><span class="level-badge level-' + lvl + '">' + lvl + '</span></td>' +
         '<td class="font-mono">' + rid + '</td>' +
+        custTd +
         '<td class="description-cell"><a href="/alerts/' + c.id + '" class="case-link">' + desc + '</a></td>' +
         '<td class="font-mono text-sm">' + (c.agent_count || 0) + '</td>' +
         '<td><span class="count-badge">' + (c.total_count || 0) + '</span></td>' +
         '<td class="text-sm text-muted">' + fs + '</td>' +
         '<td class="text-sm text-muted">' + ls + '</td>' +
         '<td><span class="status-badge status-' + st + '">' + st + '</span></td>' +
-        '<td class="actions-cell">' +
+        '<td class="actions-cell">' + noteHtml +
           '<a href="/alerts/' + c.id + '" class="btn btn-xs btn-ghost">View</a>' +
           openBtns +
         '</td></tr>';
