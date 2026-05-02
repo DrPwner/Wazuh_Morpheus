@@ -52,7 +52,16 @@
         <td>Exception field path (exceptions only)</td></tr>
     <tr><td style="padding:2px 8px 2px 0;"><code>field_value</code></td>
         <td>Exception field value/pattern (exceptions only)</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>customer</code></td>
+        <td>Customer identity value from the alert case (requires Customer Field configured)</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>user_email</code></td>
+        <td>Email address of the user who performed the action</td></tr>
   </table>
+
+  <p style="margin:12px 0 0;font-size:12px;color:var(--text-muted);">
+    <strong>Tip:</strong> To include customer identity in webhook payloads, configure the Customer Field in
+    <a href="{{ url_for('settings.general') }}#customer-field-card">Settings &gt; General</a>.
+  </p>
 
   <strong style="display:block;margin-top:12px;">Example payload</strong>
   <pre style="margin:4px 0 0;padding:8px 10px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:4px;font-size:11px;overflow-x:auto;">{

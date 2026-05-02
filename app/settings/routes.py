@@ -755,6 +755,21 @@ def toggle_email_template(event_type):
 # Indexer Monitoring
 # ============================================================
 
+@settings_bp.route('/customer-field', methods=['POST'])
+@login_required
+@permission_required('manage_settings')
+def update_customer_field():
+    data = request.get_json() or {}
+    field = (data.get('field') or '').strip()
+    cfg = _read_config()
+    if 'alerts' not in cfg:
+        cfg['alerts'] = {}
+    cfg['alerts']['customer_field'] = field
+    _write_config(cfg)
+    log_action('UPDATE_CUSTOMER_FIELD', 'Settings', {'customer_field': field})
+    return jsonify({'success': True})
+
+
 @settings_bp.route('/alert-columns', methods=['POST'])
 @login_required
 @permission_required('manage_settings')

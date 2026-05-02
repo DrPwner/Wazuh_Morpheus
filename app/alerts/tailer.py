@@ -65,6 +65,9 @@ def _tailer_worker(app):
                     except OSError:
                         pass
 
+                    # Read customer_field from live config each iteration
+                    _customer_field = config.get('alerts', {}).get('customer_field', '')
+
                     chunk = f.read(4096)
                     if not chunk:
                         # Try to flush any complete object sitting in the buffer
@@ -73,7 +76,7 @@ def _tailer_worker(app):
                             try:
                                 obj, _ = _decoder.raw_decode(_buf)
                                 if isinstance(obj, dict):
-                                    _process_alert(obj, db_path)
+                                    _process_alert(obj, db_path, _customer_field)
                                 _buf = ''
                             except json.JSONDecodeError:
                                 pass
@@ -92,7 +95,7 @@ def _tailer_worker(app):
                         try:
                             obj, end = _decoder.raw_decode(_buf, pos)
                             if isinstance(obj, dict):
-                                _process_alert(obj, db_path)
+                                _process_alert(obj, db_path, _customer_field)
                             pos = end
                         except json.JSONDecodeError:
                             # Incomplete object — keep remainder in buffer
@@ -107,7 +110,35 @@ def _tailer_worker(app):
             _tailer_worker(app)
 
 
-def process_alert(alert, db):
+def _resolve_dot_path(obj, path):
+    """Walk a dot-separated path on a nested dict, returning the value or ''.
+    Uses case-insensitive key matching at each level."""
+    parts = path.split('.')
+    cur = obj
+    for p in parts:
+        if isinstance(cur, dict):
+            # Try exact match first
+            if p in cur:
+                cur = cur[p]
+            else:
+                # Case-insensitive fallback
+                p_lower = p.lower()
+                found = False
+                for k in cur:
+                    if k.lower() == p_lower:
+                        cur = cur[k]
+                        found = True
+                        break
+                if not found:
+                    return ''
+        else:
+            return ''
+        if cur is None:
+            return ''
+    return str(cur) if cur is not None else ''
+
+
+def process_alert(alert, db, customer_field=''):
     """
     Process a single parsed alert dict and write it to the given DB connection.
     The caller is responsible for commit/rollback.
@@ -126,6 +157,11 @@ def process_alert(alert, db):
     if rule_level == 0:
         return False
 
+    # Extract customer value from alert using configured dot-path
+    customer = ''
+    if customer_field:
+        customer = _resolve_dot_path(alert, customer_field)
+
     # Dedup: skip if already processed (gracefully handles missing column)
     if wazuh_alert_id:
         try:
@@ -139,8 +175,8 @@ def process_alert(alert, db):
             pass  # wazuh_alert_id column not yet migrated — skip dedup check
 
     existing = db.execute(
-        "SELECT id FROM alert_cases WHERE rule_id = ? AND status = 'open'",
-        (rule_id,)
+        "SELECT id FROM alert_cases WHERE rule_id = ? AND customer = ? AND status = 'open'",
+        (rule_id, customer)
     ).fetchone()
 
     if existing:
@@ -153,9 +189,9 @@ def process_alert(alert, db):
         cur = db.execute(
             '''INSERT INTO alert_cases
                (rule_id, rule_description, rule_level, rule_groups, mitre_ids,
-                first_seen, last_seen, total_count, status)
-               VALUES (?,?,?,?,?,?,?,1,'open')''',
-            (rule_id, rule_desc, rule_level, rule_groups, mitre_ids, timestamp, timestamp)
+                first_seen, last_seen, total_count, status, customer)
+               VALUES (?,?,?,?,?,?,?,1,'open',?)''',
+            (rule_id, rule_desc, rule_level, rule_groups, mitre_ids, timestamp, timestamp, customer)
         )
         case_id = cur.lastrowid
 
@@ -186,11 +222,11 @@ def process_alert(alert, db):
     return True
 
 
-def _process_alert(alert, db_path):
+def _process_alert(alert, db_path, customer_field=''):
     from ..database import get_db_direct
     db = get_db_direct(db_path)
     try:
-        process_alert(alert, db)
+        process_alert(alert, db, customer_field=customer_field)
         db.commit()
     except Exception as e:
         logger.error(f'DB error in tailer: {e}')

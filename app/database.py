@@ -119,8 +119,19 @@ def _create_schema(db):
             notes TEXT,
             closed_at TEXT,
             closed_by INTEGER,
+            customer TEXT DEFAULT '',
             FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
             FOREIGN KEY (closed_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS case_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id INTEGER NOT NULL REFERENCES alert_cases(id),
+            user_id INTEGER NOT NULL,
+            username TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now')),
+            updated_at TEXT
         );
 
         CREATE TABLE IF NOT EXISTS alert_events (
@@ -209,6 +220,7 @@ def _create_schema(db):
         CREATE INDEX IF NOT EXISTS idx_alert_cases_rule_id ON alert_cases(rule_id);
         CREATE INDEX IF NOT EXISTS idx_alert_cases_status ON alert_cases(status);
         CREATE INDEX IF NOT EXISTS idx_alert_events_case_id ON alert_events(case_id);
+        CREATE INDEX IF NOT EXISTS idx_case_notes_case_id ON case_notes(case_id);
         CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
         CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
         CREATE INDEX IF NOT EXISTS idx_webhook_log_created ON webhook_log(created_at);
@@ -226,6 +238,20 @@ def _create_schema(db):
         db.commit()
     except Exception:
         pass  # Column already exists
+
+    # Migration: add customer column to alert_cases
+    try:
+        db.execute("ALTER TABLE alert_cases ADD COLUMN customer TEXT DEFAULT ''")
+        db.commit()
+    except Exception:
+        pass  # Column already exists
+
+    # Index on customer — must be created after migration ensures column exists
+    try:
+        db.execute('CREATE INDEX IF NOT EXISTS idx_alert_cases_customer ON alert_cases(customer)')
+        db.commit()
+    except Exception:
+        pass
 
 
 PERMISSIONS = [
@@ -256,6 +282,9 @@ PERMISSIONS = [
     ('manage_backups',          'Configure and trigger backups',              'Settings'),
     ('manage_integrations',     'Configure webhook integrations and automation', 'Settings'),
     ('bulk_actions',            'Perform bulk ignore and suppress on alert cases', 'Alerts'),
+    ('add_notes',               'Add notes to alert cases',                       'Alerts'),
+    ('delete_own_notes',        'Delete own notes on alert cases',                'Alerts'),
+    ('edit_own_notes',          'Edit own notes on alert cases',                  'Alerts'),
 ]
 
 

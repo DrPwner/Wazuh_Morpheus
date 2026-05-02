@@ -12,6 +12,20 @@ from ..notifications.webhook_service import is_integration_enabled, get_resoluti
 alerts_bp = Blueprint('alerts', __name__)
 
 
+def _webhook_extras(case, db):
+    """Return extra webhook fields: customer and user_email."""
+    customer = case['customer'] if 'customer' in case.keys() else ''
+    user_email = ''
+    try:
+        row = db.execute('SELECT email FROM users WHERE username = ?',
+                         (session.get('username', ''),)).fetchone()
+        if row:
+            user_email = row['email'] or ''
+    except Exception:
+        pass
+    return {'customer': customer, 'user_email': user_email}
+
+
 @alerts_bp.route('/')
 @login_required
 @permission_required('view_alerts')
@@ -39,7 +53,8 @@ def cases_list():
     query = '''
         SELECT ac.*,
                COUNT(DISTINCT COALESCE(NULLIF(ae.agent_ip,''), ae.agent_id)) as agent_count,
-               u.username as assigned_username
+               u.username as assigned_username,
+               (SELECT COUNT(*) FROM case_notes cn WHERE cn.case_id = ac.id) as note_count
         FROM alert_cases ac
         LEFT JOIN alert_events ae ON ae.case_id = ac.id
         LEFT JOIN users u ON u.id = ac.assigned_to
@@ -80,6 +95,8 @@ def cases_list():
     ).fetchall():
         summary[row['status']] = row['cnt']
 
+    customer_field = current_app.config.get('CONFIG', {}).get('alerts', {}).get('customer_field', '')
+
     return render_template(
         'alerts/list.html',
         cases=cases,
@@ -93,6 +110,7 @@ def cases_list():
         total_count=total_count,
         has_next=len(cases) == per_page,
         summary=summary,
+        customer_field=customer_field,
         active_page='alerts'
     )
 
@@ -381,6 +399,7 @@ def close_case(case_id):
         except Exception:
             pass
         if is_integration_enabled():
+            _extras = _webhook_extras(case, db)
             fire_webhook('case_ignored', {
                 'action': 'case_ignored',
                 'rule_id': case['rule_id'],
@@ -390,6 +409,8 @@ def close_case(case_id):
                 'username': session.get('username', ''),
                 'timestamp': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'),
                 'case_id': case_id,
+                'customer': _extras['customer'],
+                'user_email': _extras['user_email'],
             }, current_app._get_current_object())
     return jsonify({'success': True})
 
@@ -449,6 +470,13 @@ def bulk_ignore():
         except Exception:
             pass
         if is_integration_enabled():
+            _extras = _webhook_extras({'customer': ''}, db)
+            # Collect customer values from the ignored cases
+            _customers = []
+            for r in results:
+                _c = db.execute('SELECT customer FROM alert_cases WHERE id = ?', (r['case_id'],)).fetchone()
+                if _c:
+                    _customers.append(_c['customer'] or '')
             fire_webhook('bulk_ignore', {
                 'action': 'bulk_ignore',
                 'rule_id': ', '.join(r['rule_id'] for r in results),
@@ -459,6 +487,8 @@ def bulk_ignore():
                 'timestamp': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'),
                 'case_ids': [r['case_id'] for r in results],
                 'rule_ids': [r['rule_id'] for r in results],
+                'customers': _customers,
+                'user_email': _extras['user_email'],
             }, current_app._get_current_object())
 
     return jsonify({'results': results, 'errors': errors})
@@ -580,6 +610,12 @@ def bulk_suppress():
         except Exception:
             pass
         if is_integration_enabled():
+            _extras = _webhook_extras({'customer': ''}, db)
+            _customers = []
+            for r in closed_cases:
+                _c = db.execute('SELECT customer FROM alert_cases WHERE id = ?', (r['case_id'],)).fetchone()
+                if _c:
+                    _customers.append(_c['customer'] or '')
             fire_webhook('bulk_suppress', {
                 'action': 'bulk_suppress',
                 'rule_id': ', '.join(suppressed_rules),
@@ -590,6 +626,8 @@ def bulk_suppress():
                 'timestamp': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'),
                 'case_ids': [r['case_id'] for r in closed_cases],
                 'rule_ids': suppressed_rules,
+                'customers': _customers,
+                'user_email': _extras['user_email'],
             }, current_app._get_current_object())
 
     return jsonify({
@@ -638,7 +676,8 @@ def api_cases():
 
     query = '''
         SELECT ac.*,
-               COUNT(DISTINCT COALESCE(NULLIF(ae.agent_ip,''), ae.agent_id)) as agent_count
+               COUNT(DISTINCT COALESCE(NULLIF(ae.agent_ip,''), ae.agent_id)) as agent_count,
+               (SELECT COUNT(*) FROM case_notes cn WHERE cn.case_id = ac.id) as note_count
         FROM alert_cases ac
         LEFT JOIN alert_events ae ON ae.case_id = ac.id
         WHERE 1=1
@@ -934,3 +973,85 @@ def import_alerts_file():
         'first_alert': first_alert_debug,
         'db_path': db_path,
     })
+
+
+# ============================================================
+# Case Notes CRUD
+# ============================================================
+
+@alerts_bp.route('/<int:case_id>/notes')
+@login_required
+@permission_required('view_alert_details')
+def get_notes(case_id):
+    db = get_db()
+    notes = db.execute(
+        'SELECT * FROM case_notes WHERE case_id = ? ORDER BY created_at DESC',
+        (case_id,)
+    ).fetchall()
+    return jsonify([dict(n) for n in notes])
+
+
+@alerts_bp.route('/<int:case_id>/notes', methods=['POST'])
+@login_required
+@permission_required('add_notes')
+def create_note(case_id):
+    data = request.get_json() or {}
+    content = (data.get('content') or '').strip()
+    if not content:
+        return jsonify({'error': 'Content is required'}), 400
+
+    db = get_db()
+    case = db.execute('SELECT id FROM alert_cases WHERE id = ?', (case_id,)).fetchone()
+    if not case:
+        return jsonify({'error': 'Case not found'}), 404
+
+    cur = db.execute(
+        '''INSERT INTO case_notes (case_id, user_id, username, content)
+           VALUES (?, ?, ?, ?)''',
+        (case_id, session['user_id'], session.get('username', ''), content)
+    )
+    db.commit()
+    log_action('ADD_NOTE', 'Alerts', {'case_id': case_id, 'note_id': cur.lastrowid})
+    return jsonify({'success': True, 'note_id': cur.lastrowid})
+
+
+@alerts_bp.route('/notes/<int:note_id>', methods=['PUT'])
+@login_required
+@permission_required('edit_own_notes')
+def edit_note(note_id):
+    data = request.get_json() or {}
+    content = (data.get('content') or '').strip()
+    if not content:
+        return jsonify({'error': 'Content is required'}), 400
+
+    db = get_db()
+    note = db.execute('SELECT * FROM case_notes WHERE id = ?', (note_id,)).fetchone()
+    if not note:
+        return jsonify({'error': 'Note not found'}), 404
+    if note['user_id'] != session['user_id']:
+        return jsonify({'error': 'You can only edit your own notes'}), 403
+
+    db.execute(
+        "UPDATE case_notes SET content = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%S','now') WHERE id = ?",
+        (content, note_id)
+    )
+    db.commit()
+    log_action('EDIT_NOTE', 'Alerts', {'note_id': note_id, 'case_id': note['case_id']})
+    return jsonify({'success': True})
+
+
+@alerts_bp.route('/notes/<int:note_id>', methods=['DELETE'])
+@login_required
+@permission_required('delete_own_notes')
+def delete_note(note_id):
+    db = get_db()
+    note = db.execute('SELECT * FROM case_notes WHERE id = ?', (note_id,)).fetchone()
+    if not note:
+        return jsonify({'error': 'Note not found'}), 404
+    if note['user_id'] != session['user_id']:
+        return jsonify({'error': 'You can only delete your own notes'}), 403
+
+    db.execute('DELETE FROM case_notes WHERE id = ?', (note_id,))
+    db.commit()
+    log_action('DELETE_NOTE', 'Alerts', {'note_id': note_id, 'case_id': note['case_id']})
+    return jsonify({'success': True})

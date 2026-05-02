@@ -1258,6 +1258,73 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ============================================================
+  // Customer Field — case separation
+  // ============================================================
+  var customerFieldInput = document.getElementById('customerFieldInput');
+  var customerFieldList = document.getElementById('customerFieldList');
+  var saveCustomerFieldBtn = document.getElementById('saveCustomerFieldBtn');
+  var clearCustomerFieldBtn = document.getElementById('clearCustomerFieldBtn');
+
+  if (customerFieldList) {
+    (async function () {
+      try {
+        var data = await apiGet('/rules/api/fields');
+        var fields = data.fields || [];
+        fields.forEach(function (f) {
+          var opt = document.createElement('div');
+          opt.className = 'search-dropdown-opt';
+          opt.dataset.field = f;
+          opt.textContent = f;
+          customerFieldList.appendChild(opt);
+        });
+      } catch (e) { /* fields not available */ }
+    })();
+
+    customerFieldInput.addEventListener('focus', function () {
+      customerFieldList.style.display = 'block';
+    });
+    customerFieldInput.addEventListener('input', function () {
+      var val = this.value.toLowerCase();
+      customerFieldList.querySelectorAll('.search-dropdown-opt').forEach(function (opt) {
+        opt.style.display = opt.textContent.toLowerCase().indexOf(val) !== -1 ? '' : 'none';
+      });
+      customerFieldList.style.display = 'block';
+    });
+    customerFieldList.addEventListener('click', function (e) {
+      var opt = e.target.closest('.search-dropdown-opt');
+      if (!opt) return;
+      customerFieldInput.value = opt.dataset.field;
+      customerFieldList.style.display = 'none';
+    });
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('#customerFieldWrap')) {
+        customerFieldList.style.display = 'none';
+      }
+    });
+  }
+
+  if (clearCustomerFieldBtn) {
+    clearCustomerFieldBtn.addEventListener('click', function () {
+      if (customerFieldInput) customerFieldInput.value = '';
+    });
+  }
+
+  if (saveCustomerFieldBtn) {
+    saveCustomerFieldBtn.addEventListener('click', async function () {
+      var field = (customerFieldInput || {}).value || '';
+      setLoading(saveCustomerFieldBtn, true);
+      try {
+        await apiPost('/settings/customer-field', { field: field.trim() });
+        showToast(field ? 'Customer field saved' : 'Customer field cleared', 'success');
+      } catch (e) {
+        showToast(e.message, 'error');
+      } finally {
+        setLoading(saveCustomerFieldBtn, false);
+      }
+    });
+  }
+
+  // ============================================================
   // WazuhFields — update index mapping
   // ============================================================
   var saveFieldsBtn = document.getElementById('saveWazuhFieldsBtn');

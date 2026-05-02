@@ -98,6 +98,7 @@ DEFAULT_CONFIG = {
         "hosts": []
     },
     "alerts": {
+        "customer_field": "",
         "event_columns": [
             {"field": "timestamp", "label": "Timestamp"},
             {"field": "agent.name", "label": "Endpoint"},

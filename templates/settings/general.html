@@ -123,6 +123,27 @@
     </div>
   </div>
 
+  <!-- Customer Field -->
+  <div class="card" id="customer-field-card">
+    <div class="card-header">
+      <span class="card-title">Customer Field (Case Separation)</span>
+      <span class="card-subtitle text-muted">When set, alerts with the same rule ID but different customer values create separate cases</span>
+    </div>
+    <div class="card-body">
+      <div class="silence-field-row" style="align-items:flex-start">
+        <div class="search-dropdown" id="customerFieldWrap" style="flex:1">
+          <input type="text" class="form-control font-mono search-dropdown-input" id="customerFieldInput"
+                 placeholder="e.g. agent.labels.Customer" autocomplete="off"
+                 value="{{ config.get('alerts', {}).get('customer_field', '') }}">
+          <div class="search-dropdown-list" id="customerFieldList"></div>
+        </div>
+        <button class="btn btn-ghost" id="clearCustomerFieldBtn" type="button" title="Clear (disable)">Clear</button>
+        <button class="btn btn-primary" id="saveCustomerFieldBtn" type="button">Save</button>
+      </div>
+      <small class="form-hint">Dot-path to the customer identity field in alerts JSON (e.g. <code>agent.labels.Customer</code> or <code>data.label.customer</code>). Leave empty to disable customer separation.</small>
+    </div>
+  </div>
+
   <!-- Email -->
   <div class="card">
     <div class="card-header">

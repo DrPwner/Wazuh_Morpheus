@@ -144,8 +144,13 @@ document.addEventListener('DOMContentLoaded', function () {
     return ids;
   }
 
+  var singleActionBar = document.getElementById('singleActionBar');
+
   function _updateBulkBar() {
     var ids = _getSelectedIds();
+    if (singleActionBar) {
+      singleActionBar.style.display = ids.length === 1 ? 'flex' : 'none';
+    }
     if (bulkActionBar) {
       bulkActionBar.style.display = ids.length >= 2 ? 'flex' : 'none';
     }
@@ -178,6 +183,25 @@ document.addEventListener('DOMContentLoaded', function () {
       document.querySelectorAll('.case-select-cb').forEach(function (cb) { cb.checked = false; });
       if (selectAllCb) selectAllCb.checked = false;
       _updateBulkBar();
+    });
+  }
+
+  var singleClearBtn = document.getElementById('singleClearBtn');
+  if (singleClearBtn) {
+    singleClearBtn.addEventListener('click', function () {
+      document.querySelectorAll('.case-select-cb').forEach(function (cb) { cb.checked = false; });
+      if (selectAllCb) selectAllCb.checked = false;
+      _updateBulkBar();
+    });
+  }
+
+  var singleAddNoteBtn = document.getElementById('singleAddNoteBtn');
+  if (singleAddNoteBtn) {
+    singleAddNoteBtn.addEventListener('click', function () {
+      var ids = _getSelectedIds();
+      if (ids.length === 1) {
+        _openNotesForCase(ids[0]);
+      }
     });
   }
 
@@ -1006,6 +1030,159 @@ document.addEventListener('DOMContentLoaded', function () {
     // Expose wire function so the live-poll callback can wire newly inserted rows
     window._wireCaseExceptionBtn = _wireExBtn;
   })();
+
+  // ============================================================
+  // Case Notes (works on both list and detail pages)
+  // ============================================================
+  var notesModal = document.getElementById('notesModal');
+  var notesCaseId = null;
+  var notesList = document.getElementById('notesList');
+  var newNoteContent = document.getElementById('newNoteContent');
+
+  function _openNotesForCase(caseId) {
+    if (!notesModal) return;
+    notesCaseId = caseId;
+    if (notesList) notesList.innerHTML = '<div class="note-empty">Loading...</div>';
+    if (newNoteContent) newNoteContent.value = '';
+    openModal('notesModal');
+    _fetchNotes(caseId);
+  }
+
+  function _fetchNotes(caseId) {
+    if (!notesList) return;
+    apiGet('/alerts/' + caseId + '/notes').then(function (notes) {
+      if (!notes || notes.length === 0) {
+        notesList.innerHTML = '<div class="note-empty">No notes yet.</div>';
+        return;
+      }
+      var html = '';
+      notes.forEach(function (n) {
+        var isOwn = window.CURRENT_USER && window.CURRENT_USER.id === n.user_id;
+        html += '<div class="note-card" data-note-id="' + n.id + '">'
+          + '<div class="note-card-header">'
+          + '<span class="note-author">' + escapeHtml(n.username) + '</span>'
+          + '<span class="note-time">' + formatDate(n.created_at) + (n.updated_at ? ' (edited)' : '') + '</span>'
+          + '</div>'
+          + '<div class="note-content">' + escapeHtml(n.content) + '</div>';
+        if (isOwn) {
+          html += '<div class="note-actions">'
+            + '<button class="btn btn-xs btn-ghost note-edit-btn" data-note-id="' + n.id + '">Edit</button>'
+            + '<button class="btn btn-xs btn-ghost text-danger note-delete-btn" data-note-id="' + n.id + '">Delete</button>'
+            + '</div>';
+        }
+        html += '</div>';
+      });
+      notesList.innerHTML = html;
+    }).catch(function () {
+      notesList.innerHTML = '<div class="note-empty">Failed to load notes.</div>';
+    });
+  }
+
+  // Open modal from note icon buttons
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.note-icon-btn');
+    if (btn) {
+      _openNotesForCase(btn.dataset.caseId);
+    }
+  });
+
+  if (notesModal) {
+    // Close (only via X button, Cancel, or ESC — not backdrop click)
+    document.getElementById('notesModalClose').addEventListener('click', function () { closeModal('notesModal'); });
+    document.getElementById('notesCancelBtn').addEventListener('click', function () { closeModal('notesModal'); });
+
+    // Add note
+    document.getElementById('notesAddBtn').addEventListener('click', async function () {
+      var content = (newNoteContent.value || '').trim();
+      if (!content) { showToast('Note content is required', 'error'); return; }
+      var btn = this;
+      setLoading(btn, true);
+      try {
+        await apiPost('/alerts/' + notesCaseId + '/notes', { content: content });
+        newNoteContent.value = '';
+        _fetchNotes(notesCaseId);
+        showToast('Note added', 'success');
+      } catch (e) {
+        showToast(e.message || 'Failed to add note', 'error');
+      } finally {
+        setLoading(btn, false);
+      }
+    });
+
+    // Note actions (single delegated handler)
+    notesList.addEventListener('click', function (e) {
+      // Edit
+      var editBtn = e.target.closest('.note-edit-btn');
+      if (editBtn) {
+        var noteId = editBtn.dataset.noteId;
+        var card = editBtn.closest('.note-card');
+        var contentEl = card.querySelector('.note-content');
+        var currentText = contentEl.textContent;
+        var ta = document.createElement('textarea');
+        ta.className = 'form-control';
+        ta.rows = 3;
+        ta.value = currentText;
+        contentEl.replaceWith(ta);
+        var actionsEl = card.querySelector('.note-actions');
+        actionsEl.innerHTML = '<button class="btn btn-xs btn-primary note-save-edit-btn" data-note-id="' + noteId + '">Save</button>'
+          + ' <button class="btn btn-xs btn-ghost note-cancel-edit-btn">Cancel</button>';
+        return;
+      }
+
+      // Save edit
+      var saveBtn = e.target.closest('.note-save-edit-btn');
+      if (saveBtn) {
+        var sNoteId = saveBtn.dataset.noteId;
+        var sCard = saveBtn.closest('.note-card');
+        var sTa = sCard.querySelector('textarea');
+        var sContent = (sTa.value || '').trim();
+        if (!sContent) { showToast('Note cannot be empty', 'error'); return; }
+        setLoading(saveBtn, true);
+        fetch('/alerts/notes/' + sNoteId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: sContent })
+        }).then(function (resp) {
+          return resp.json().then(function (json) {
+            if (!resp.ok) throw new Error(json.error || 'Request failed');
+            _fetchNotes(notesCaseId);
+            showToast('Note updated', 'success');
+          });
+        }).catch(function (err) {
+          showToast(err.message || 'Failed to update note', 'error');
+        }).finally(function () {
+          setLoading(saveBtn, false);
+        });
+        return;
+      }
+
+      // Cancel edit
+      if (e.target.closest('.note-cancel-edit-btn')) {
+        _fetchNotes(notesCaseId);
+        return;
+      }
+
+      // Delete
+      var delBtn = e.target.closest('.note-delete-btn');
+      if (delBtn) {
+        var dNoteId = delBtn.dataset.noteId;
+        confirm('Delete Note', 'Delete this note?', function () {
+          fetch('/alerts/notes/' + dNoteId, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+          }).then(function (resp) {
+            return resp.json().then(function (json) {
+              if (!resp.ok) throw new Error(json.error || 'Request failed');
+              _fetchNotes(notesCaseId);
+              showToast('Note deleted', 'success');
+            });
+          }).catch(function (err) {
+            showToast(err.message || 'Failed to delete note', 'error');
+          });
+        });
+      }
+    });
+  }
 
   // ============================================================
   // CASE DETAIL page
@@ -1970,4 +2147,5 @@ document.addEventListener('DOMContentLoaded', function () {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   }
+
 });

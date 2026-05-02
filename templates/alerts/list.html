@@ -60,6 +60,13 @@
   </form>
 </div>
 
+<!-- Single-case action bar (1 selected) -->
+<div class="bulk-action-bar" id="singleActionBar" style="display:none">
+  <span class="bulk-count" id="singleCount">1 selected</span>
+  <button class="btn btn-sm btn-secondary" id="singleAddNoteBtn">Add Note</button>
+  <button class="btn btn-sm btn-ghost" id="singleClearBtn">Clear Selection</button>
+</div>
+
 <!-- Bulk Action Bar (hidden until 2+ selected) -->
 <div class="bulk-action-bar" id="bulkActionBar" style="display:none">
   <span class="bulk-count" id="bulkCount">0 selected</span>
@@ -90,6 +97,9 @@
               Rule ID{% if sort_by == 'rule_id' %} <span class="sort-arrow">{% if sort_dir == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>{% endif %}
             </a>
           </th>
+          {% if customer_field %}
+          <th>Customer</th>
+          {% endif %}
           <th>
             {% set nd = 'desc' if sort_by == 'description' and sort_dir == 'asc' else 'asc' %}
             <a href="?status={{ status_filter }}&q={{ search }}&sort_by=description&sort_dir={{ nd }}" class="col-sort{% if sort_by == 'description' %} col-sort-active{% endif %}">
@@ -131,6 +141,9 @@
             <span class="level-badge level-{{ case.rule_level }}">{{ case.rule_level }}</span>
           </td>
           <td class="font-mono">{{ case.rule_id }}</td>
+          {% if customer_field %}
+          <td class="text-sm">{{ case.customer or '-' }}</td>
+          {% endif %}
           <td class="description-cell">
             <a href="{{ url_for('alerts.case_detail', case_id=case.id) }}" class="case-link">
               {{ case.rule_description or 'No description' }}
@@ -146,6 +159,15 @@
             <span class="status-badge status-{{ case.status }}">{{ case.status }}</span>
           </td>
           <td class="actions-cell">
+            {% if case.note_count %}
+            <button class="btn btn-xs btn-ghost note-icon-btn has-notes"
+                    data-case-id="{{ case.id }}" title="{{ case.note_count }} note(s)">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+              <span class="note-count-badge">{{ case.note_count }}</span>
+            </button>
+            {% endif %}
             <a href="{{ url_for('alerts.case_detail', case_id=case.id) }}" class="btn btn-xs btn-ghost" title="View details">
               View
             </a>
@@ -162,7 +184,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="10" class="empty-state">
+          <td colspan="{{ 11 if customer_field else 10 }}" class="empty-state">
             <div class="empty-content">
               <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
@@ -321,10 +343,37 @@
   </div>
 </div>
 
+<!-- Notes Modal -->
+<div class="modal-overlay" id="notesModal">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <h3 class="modal-title">Case Notes</h3>
+      <button class="modal-close" id="notesModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="notesList" class="notes-list">
+        <div class="note-empty">Loading...</div>
+      </div>
+      <hr style="margin:12px 0;border-color:var(--border-color)">
+      <div class="form-group">
+        <label class="form-label">Add Note</label>
+        <textarea id="newNoteContent" class="form-control" rows="3" placeholder="Write a note..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="notesCancelBtn">Close</button>
+      <button class="btn btn-primary" id="notesAddBtn">Add Note</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block page_js %}
+<script>
+window.CURRENT_USER = { username: {{ session.get('username', '') | tojson }}, id: {{ session.get('user_id', 0) | tojson }} };
+</script>
 <script src="{{ url_for('static', filename='js/xml-viewer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/diff-viewer.js') }}"></script>
-<script src="{{ url_for('static', filename='js/alerts.js') }}"></script>
+<script src="{{ url_for('static', filename='js/alerts.js') }}?v=7"></script>
 {% endblock %}

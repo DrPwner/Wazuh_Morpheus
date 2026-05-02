@@ -453,6 +453,15 @@ def create_exception():
             'notes': notes,
         })
         if is_integration_enabled():
+            _customer = ''
+            _user_email = ''
+            if case_id:
+                _case_row = db.execute('SELECT customer FROM alert_cases WHERE id = ?', (case_id,)).fetchone()
+                if _case_row:
+                    _customer = _case_row['customer'] or ''
+            _u_row = db.execute('SELECT email FROM users WHERE username = ?', (session.get('username', ''),)).fetchone()
+            if _u_row:
+                _user_email = _u_row['email'] or ''
             fire_webhook('exception_created', {
                 'action': 'exception_created',
                 'rule_id': rule_id,
@@ -464,6 +473,8 @@ def create_exception():
                 'case_id': case_id,
                 'field_name': field_name,
                 'field_value': field_value,
+                'customer': _customer,
+                'user_email': _user_email,
             }, current_app._get_current_object())
 
         return jsonify({'success': True, 'diff': diff})
@@ -703,6 +714,15 @@ def create_suppression():
             'notes': notes,
         })
         if is_integration_enabled():
+            _customer = ''
+            _user_email = ''
+            if case_id:
+                _case_row = db.execute('SELECT customer FROM alert_cases WHERE id = ?', (case_id,)).fetchone()
+                if _case_row:
+                    _customer = _case_row['customer'] or ''
+            _u_row = db.execute('SELECT email FROM users WHERE username = ?', (session.get('username', ''),)).fetchone()
+            if _u_row:
+                _user_email = _u_row['email'] or ''
             fire_webhook('suppression_created', {
                 'action': 'suppression_created',
                 'rule_id': rule_id,
@@ -712,6 +732,8 @@ def create_suppression():
                 'username': session.get('username', ''),
                 'timestamp': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'),
                 'case_id': case_id,
+                'customer': _customer,
+                'user_email': _user_email,
             }, current_app._get_current_object())
 
         return jsonify({'success': True, 'diff': diff})
