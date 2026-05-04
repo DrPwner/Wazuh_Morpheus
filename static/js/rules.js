@@ -16,6 +16,19 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ============================================================
+  // Rule group selector — updates Rule ID when group changes
+  // ============================================================
+  var ruleTargetGroup = document.getElementById('ruleTargetGroup');
+  if (ruleTargetGroup) {
+    ruleTargetGroup.addEventListener('change', function () {
+      var opt = this.options[this.selectedIndex];
+      var nextId = opt.getAttribute('data-next-id');
+      var ruleIdEl = document.getElementById('ruleId');
+      if (ruleIdEl && nextId) ruleIdEl.value = nextId;
+    });
+  }
+
+  // ============================================================
   // Collapsible sections (Advanced: Frequency / Timeframe)
   // ============================================================
   const freqToggle = document.getElementById('freqToggle');
@@ -207,6 +220,7 @@ document.addEventListener('DOMContentLoaded', function () {
       frequency:   freq      || null,
       timeframe:   timeframe || null,
       ignore:      ignore    || null,
+      target_group: (document.getElementById('ruleTargetGroup') || {value: ''}).value,
     };
   }
 

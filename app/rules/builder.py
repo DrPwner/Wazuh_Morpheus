@@ -258,91 +258,120 @@ def restore_default_rule(suppressions_file, rule_id):
 # Create a new custom rule
 # ---------------------------------------------------------------------------
 
+def _build_rule_xml(rule_data):
+    """Build a <rule> XML string from rule_data dict."""
+    tmp_root = etree.Element('_tmp')
+    rule_elem = etree.SubElement(tmp_root, 'rule')
+    rule_elem.set('id', str(rule_data['id']))
+    rule_elem.set('level', str(rule_data['level']))
+
+    if rule_data.get('frequency'):
+        rule_elem.set('frequency', str(rule_data['frequency']))
+    if rule_data.get('timeframe'):
+        rule_elem.set('timeframe', str(rule_data['timeframe']))
+    if rule_data.get('ignore'):
+        rule_elem.set('ignore', str(rule_data['ignore']))
+
+    for cond_tag in ('if_sid', 'if_group', 'if_matched_sid', 'if_matched_group',
+                      'decoded_as', 'category'):
+        val = rule_data.get(cond_tag)
+        if val:
+            elem = etree.SubElement(rule_elem, cond_tag)
+            elem.text = str(val)
+
+    if rule_data.get('match'):
+        m = etree.SubElement(rule_elem, 'match')
+        m.set('type', rule_data.get('match_type', 'pcre2'))
+        m.text = rule_data['match']
+
+    if rule_data.get('regex'):
+        r = etree.SubElement(rule_elem, 'regex')
+        r.set('type', rule_data.get('regex_type', 'pcre2'))
+        r.text = rule_data['regex']
+
+    for field in rule_data.get('fields', []):
+        f_elem = etree.SubElement(rule_elem, 'field')
+        f_elem.set('name', field['name'])
+        if field.get('type'):
+            f_elem.set('type', field['type'])
+        if field.get('negate'):
+            f_elem.set('negate', 'yes')
+        f_elem.text = field['value']
+
+    desc = etree.SubElement(rule_elem, 'description')
+    desc.text = rule_data.get('description', 'Custom rule')
+
+    mitre_ids = rule_data.get('mitre_ids', [])
+    if mitre_ids:
+        mitre_elem = etree.SubElement(rule_elem, 'mitre')
+        for mid in mitre_ids:
+            id_elem = etree.SubElement(mitre_elem, 'id')
+            id_elem.text = mid
+
+    for opt in rule_data.get('options', []):
+        opt_elem = etree.SubElement(rule_elem, 'options')
+        opt_elem.text = opt
+
+    groups = rule_data.get('groups', [])
+    if groups:
+        g_elem = etree.SubElement(rule_elem, 'group')
+        g_elem.text = ','.join(groups) + ','
+
+    raw = etree.tostring(rule_elem, pretty_print=True, xml_declaration=False, encoding='unicode')
+    lines = raw.strip().split('\n')
+    return '\n'.join('  ' + line for line in lines)
+
+
 def create_custom_rule(file_path, rule_data):
     """
     Append a new custom rule to the custom rules XML file.
+    Supports files with multiple <group> root elements.
 
     rule_data keys:
       id, level, description, if_group, if_sid, fields (list of field dicts),
       match, regex, mitre_ids (list), options (list), groups (list),
-      frequency, timeframe, ignore
+      frequency, timeframe, ignore, target_group (optional group name to insert into)
     """
     with _file_lock:
         _ensure_xml_wrapper(file_path)
         before_xml = _read_file(file_path)
 
-        parser = etree.XMLParser(recover=True)
-        tree = etree.parse(file_path, parser)
-        root = tree.getroot()
+        # Validate ID doesn't already exist (scan all groups)
+        root = _load_wazuh_rules_xml(file_path)
+        for rule in root.iter('rule'):
+            if rule.get('id') == str(rule_data['id']):
+                raise ValueError(f"Rule ID {rule_data['id']} already exists in {file_path}")
 
-        # Validate ID doesn't already exist
-        if _find_rule_in_tree(root, str(rule_data['id'])) is not None:
-            raise ValueError(f"Rule ID {rule_data['id']} already exists in {file_path}")
+        rule_xml = _build_rule_xml(rule_data)
+        target_group = rule_data.get('target_group', '').strip()
 
-        rule_elem = etree.SubElement(root, 'rule')
-        rule_elem.set('id', str(rule_data['id']))
-        rule_elem.set('level', str(rule_data['level']))
+        if target_group:
+            # Find the opening <group name="target_group"> tag
+            open_pattern = re.compile(
+                r'<group\s+name\s*=\s*["\']' + re.escape(target_group) + r'["\'][^>]*>',
+            )
+            open_m = open_pattern.search(before_xml)
+            if not open_m:
+                raise ValueError(f"Group '{target_group}' not found in {file_path}")
 
-        if rule_data.get('frequency'):
-            rule_elem.set('frequency', str(rule_data['frequency']))
-        if rule_data.get('timeframe'):
-            rule_elem.set('timeframe', str(rule_data['timeframe']))
-        if rule_data.get('ignore'):
-            rule_elem.set('ignore', str(rule_data['ignore']))
+            # Find the matching top-level </group> — it will be on its own line
+            # (not indented inside a <rule>). Search from after the opening tag.
+            close_pattern = re.compile(r'^</group>', re.MULTILINE)
+            close_m = close_pattern.search(before_xml, open_m.end())
+            if not close_m:
+                raise ValueError(f"Closing </group> not found for '{target_group}' in {file_path}")
 
-        # Conditions
-        for cond_tag in ('if_sid', 'if_group', 'if_matched_sid', 'if_matched_group',
-                          'decoded_as', 'category'):
-            val = rule_data.get(cond_tag)
-            if val:
-                elem = etree.SubElement(rule_elem, cond_tag)
-                elem.text = str(val)
+            insert_pos = close_m.start()
+            after_xml = before_xml[:insert_pos] + '\n' + rule_xml + '\n\n' + before_xml[insert_pos:]
+        else:
+            # No target group — insert before the last top-level </group>
+            # Find all top-level </group> tags (start of line, not indented)
+            close_matches = list(re.finditer(r'^</group>', before_xml, re.MULTILINE))
+            if not close_matches:
+                raise ValueError(f"No <group> element found in {file_path}")
+            last_close = close_matches[-1].start()
+            after_xml = before_xml[:last_close] + '\n' + rule_xml + '\n\n' + before_xml[last_close:]
 
-        # Match/regex
-        if rule_data.get('match'):
-            m = etree.SubElement(rule_elem, 'match')
-            m.set('type', rule_data.get('match_type', 'pcre2'))
-            m.text = rule_data['match']
-
-        if rule_data.get('regex'):
-            r = etree.SubElement(rule_elem, 'regex')
-            r.set('type', rule_data.get('regex_type', 'pcre2'))
-            r.text = rule_data['regex']
-
-        # Fields
-        for field in rule_data.get('fields', []):
-            f_elem = etree.SubElement(rule_elem, 'field')
-            f_elem.set('name', field['name'])
-            if field.get('type'):
-                f_elem.set('type', field['type'])
-            if field.get('negate'):
-                f_elem.set('negate', 'yes')
-            f_elem.text = field['value']
-
-        # Description
-        desc = etree.SubElement(rule_elem, 'description')
-        desc.text = rule_data.get('description', 'Custom rule')
-
-        # MITRE
-        mitre_ids = rule_data.get('mitre_ids', [])
-        if mitre_ids:
-            mitre_elem = etree.SubElement(rule_elem, 'mitre')
-            for mid in mitre_ids:
-                id_elem = etree.SubElement(mitre_elem, 'id')
-                id_elem.text = mid
-
-        # Options
-        for opt in rule_data.get('options', []):
-            opt_elem = etree.SubElement(rule_elem, 'options')
-            opt_elem.text = opt
-
-        # Groups
-        groups = rule_data.get('groups', [])
-        if groups:
-            g_elem = etree.SubElement(rule_elem, 'group')
-            g_elem.text = ','.join(groups) + ','
-
-        after_xml = _tree_to_string(tree)
         _write_file(file_path, after_xml)
         return _make_diff(before_xml, after_xml, file_path)
 
@@ -447,9 +476,8 @@ def get_next_custom_rule_id(file_path, start=100000):
     max_id = start - 1
     if os.path.exists(file_path):
         try:
-            parser = etree.XMLParser(recover=True)
-            tree = etree.parse(file_path, parser)
-            for rule in tree.getroot().iter('rule'):
+            root = _load_wazuh_rules_xml(file_path)
+            for rule in root.iter('rule'):
                 try:
                     if rule.get('overwrite') == 'yes':
                         continue
@@ -464,6 +492,38 @@ def get_next_custom_rule_id(file_path, start=100000):
             pass
 
     return max_id + 1
+
+
+def get_custom_rule_groups(file_path):
+    """Return list of {name, next_id} for each <group> in the custom rules file."""
+    groups = []
+    if not os.path.exists(file_path):
+        return [{'name': 'local,', 'next_id': 100000}]
+    try:
+        root = _load_wazuh_rules_xml(file_path)
+        for grp in root.findall('group'):
+            if grp.get('name') is None:
+                continue
+            grp_name = grp.get('name')
+            max_id = 99999
+            for rule in grp.iter('rule'):
+                try:
+                    if rule.get('overwrite') == 'yes':
+                        continue
+                    if rule.get('noalert') == '1':
+                        continue
+                    rid = int(rule.get('id', 0))
+                    if rid > max_id:
+                        max_id = rid
+                except ValueError:
+                    pass
+            groups.append({'name': grp_name, 'next_id': max_id + 1})
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error('get_custom_rule_groups error: %s', e)
+    if not groups:
+        groups = [{'name': 'local,', 'next_id': 100000}]
+    return groups
 
 
 # ---------------------------------------------------------------------------

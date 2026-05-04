@@ -197,8 +197,11 @@ def view_rule(source, rule_id):
 def create_rule():
     cfg = _cfg()
     if request.method == 'GET':
-        next_id = rule_builder.get_next_custom_rule_id(cfg['custom_rules_path'])
-        return render_template('rules/create.html', next_id=next_id, active_page='rules', active_sub='create')
+        rule_groups = rule_builder.get_custom_rule_groups(cfg['custom_rules_path'])
+        next_id = rule_groups[0]['next_id'] if rule_groups else 100000
+        return render_template('rules/create.html', next_id=next_id,
+                               rule_groups=rule_groups,
+                               active_page='rules', active_sub='create')
 
     data = request.get_json() or request.form.to_dict()
 
@@ -227,6 +230,7 @@ def create_rule():
             'frequency': data.get('frequency'),
             'timeframe': data.get('timeframe'),
             'ignore': data.get('ignore'),
+            'target_group': data.get('target_group', ''),
         }
 
         diff = rule_builder.create_custom_rule(cfg['custom_rules_path'], rule_data)

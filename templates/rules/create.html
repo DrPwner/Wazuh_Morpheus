@@ -21,12 +21,22 @@
       <div class="card-header"><span class="card-title">Rule Definition</span></div>
       <div class="card-body">
 
+        <div class="form-group">
+          <label class="form-label">Rule Group</label>
+          <select class="form-control" id="ruleTargetGroup">
+            {% for g in rule_groups %}
+            <option value="{{ g.name }}" data-next-id="{{ g.next_id }}"{% if loop.first %} selected{% endif %}>{{ g.name }}</option>
+            {% endfor %}
+          </select>
+          <small class="form-hint">Select which group to add this rule to</small>
+        </div>
+
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Rule ID</label>
             <input type="number" class="form-control font-mono" id="ruleId" value="{{ next_id }}"
                    readonly>
-            <small class="form-hint">Auto-assigned: next available ID</small>
+            <small class="form-hint">Auto-assigned: next available ID for the selected group</small>
           </div>
           <div class="form-group">
             <label class="form-label">Level</label>
