@@ -35,9 +35,13 @@
     <tr><td style="padding:2px 8px 2px 0;"><code>rule_description</code></td>
         <td>Human-readable description of the rule</td></tr>
     <tr><td style="padding:2px 8px 2px 0;"><code>notes</code></td>
-        <td>Free-text notes entered by the analyst</td></tr>
+        <td>Free-text notes entered by the analyst (alias of <code>analysis</code>, kept for backward compatibility)</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>analysis</code></td>
+        <td>The analyst's written description/justification for the action (same value as <code>notes</code>)</td></tr>
     <tr><td style="padding:2px 8px 2px 0;"><code>resolution</code></td>
-        <td>Selected resolution category (e.g. "False Positive")</td></tr>
+        <td>Selected resolution category, e.g. "False Positive" (alias of <code>verdict</code>, kept for backward compatibility)</td></tr>
+    <tr><td style="padding:2px 8px 2px 0;"><code>verdict</code></td>
+        <td>The analyst's verdict on the alert (FP, TP, Benign Positive, etc.) &mdash; same value as <code>resolution</code></td></tr>
     <tr><td style="padding:2px 8px 2px 0;"><code>username</code></td>
         <td>The platform user who performed the action</td></tr>
     <tr><td style="padding:2px 8px 2px 0;"><code>timestamp</code></td>
@@ -63,16 +67,55 @@
     <a href="{{ url_for('settings.general') }}#customer-field-card">Settings &gt; General</a>.
   </p>
 
-  <strong style="display:block;margin-top:12px;">Example payload</strong>
+  <strong style="display:block;margin-top:12px;">Example payload &mdash; <code>case_ignored</code></strong>
   <pre style="margin:4px 0 0;padding:8px 10px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:4px;font-size:11px;overflow-x:auto;">{
   "action": "case_ignored",
   "rule_id": "60204",
   "rule_description": "Windows Logon Success",
-  "notes": "Known admin activity on jump server",
+  "notes": "Known admin activity on jump server, confirmed with the user via Teams.",
+  "analysis": "Known admin activity on jump server, confirmed with the user via Teams.",
   "resolution": "False Positive",
+  "verdict": "False Positive",
   "username": "jsmith",
   "timestamp": "2026-04-30T14:23:00",
-  "case_id": 42
+  "case_id": 42,
+  "customer": "ACME Corp",
+  "user_email": "jsmith@example.com"
+}</pre>
+
+  <strong style="display:block;margin-top:12px;">Example payload &mdash; <code>exception_created</code></strong>
+  <pre style="margin:4px 0 0;padding:8px 10px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:4px;font-size:11px;overflow-x:auto;">{
+  "action": "exception_created",
+  "rule_id": "100015",
+  "rule_description": "LOLBAS: Suspicious certutil download",
+  "notes": "certutil used by internal SCCM tooling; excluding this signed binary path.",
+  "analysis": "certutil used by internal SCCM tooling; excluding this signed binary path.",
+  "resolution": "Benign Positive",
+  "verdict": "Benign Positive",
+  "username": "jsmith",
+  "timestamp": "2026-04-30T14:25:00",
+  "case_id": 51,
+  "field_name": "win.eventdata.commandLine",
+  "field_value": "C:\\Windows\\CCM\\certutil.exe",
+  "customer": "ACME Corp",
+  "user_email": "jsmith@example.com"
+}</pre>
+
+  <strong style="display:block;margin-top:12px;">Example payload &mdash; <code>bulk_suppress</code></strong>
+  <pre style="margin:4px 0 0;padding:8px 10px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:4px;font-size:11px;overflow-x:auto;">{
+  "action": "bulk_suppress",
+  "rule_id": "100020, 100021",
+  "rule_description": "",
+  "notes": "Deprecated detections superseded by the new EDR ruleset.",
+  "analysis": "Deprecated detections superseded by the new EDR ruleset.",
+  "resolution": "True Positive",
+  "verdict": "True Positive",
+  "username": "jsmith",
+  "timestamp": "2026-04-30T14:30:00",
+  "case_ids": [42, 43, 44],
+  "rule_ids": ["100020", "100021"],
+  "customers": ["ACME Corp", "ACME Corp", "Globex"],
+  "user_email": "jsmith@example.com"
 }</pre>
 
   <strong style="display:block;margin-top:12px;">Configuration summary</strong>
